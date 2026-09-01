@@ -16,6 +16,8 @@ Color coding used in file comparison:
 
 ## VisualStudio Marketplace
 
+* [DiffFinder for VS2026 (icnocop)](https://marketplace.visualstudio.com/items?itemName=RamiAbughazaleh.DiffFinder-VS2026)
+  * Fork of [dprZoft / shelvesetcomparer](https://github.com/dprZoft/shelvesetcomparer) with additional improvements, including a fix for diff tool arguments containing spaces ([dprZoft#17](https://github.com/dprZoft/shelvesetcomparer/issues/17)) and an automated GitHub Actions build.
 * [DiffFinder for VS2026](https://marketplace.visualstudio.com/items?itemName=dprZoft.DiffFinder-VS2026)
   * New release required because, although [Microsoft VS2026 tries to be backward compatible](https://devblogs.microsoft.com/visualstudio/modernizing-visual-studio-extension-compatibility-effortless-migration-for-extension-developers-and-users/), extensions which depend on VS objects (like TeamExplorer) still need to be recompiled with matching references..
 * [DiffFinder for VS2022](https://marketplace.visualstudio.com/items?itemName=dprZoft.DiffFinder-VS2022)

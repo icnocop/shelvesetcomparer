@@ -1,0 +1,140 @@
+name: Build
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+  workflow_dispatch:
+    branches: [ master ]
+    inputs:
+      release:
+        description: 'Publish 2026 extension to Visual Studio Marketplace?'
+        required: true
+        default: 'false'
+      openvsix:
+        description: 'Publish 2026 extension to Open VSIX Gallery?'
+        required: true
+        default: 'false'
+
+jobs:
+
+  build:
+
+    strategy:
+      matrix:
+        configuration: [Debug, Release]
+
+    runs-on: windows-latest
+
+    steps:
+    - name: Set version number
+      run: |
+        $majorVersion = 1
+        $minorVersion = 6
+        $firstBuildYear = 2026
+        $currentDate = Get-Date
+        $currentDate = $currentDate.ToUniversalTime()
+        $currentYear = $currentDate.ToString("yyyy")
+        $buildYear = [Convert]::ToInt32($currentYear)
+        $currentMonthDay = $currentDate.ToString("MMdd")
+        $buildVersion = (($buildYear - $firstBuildYear) * 1200) + ([Convert]::ToInt32($currentMonthDay))
+        echo "Current Date=$currentDate"
+        echo "VERSION=$majorVersion.$minorVersion.$buildVersion.${{ github.RUN_NUMBER }}" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf-8 -Append
+
+    - name: Read environmental variables
+      run: |
+        echo VERSION=${{ env.VERSION }}
+        echo GITHUB_WORKSPACE=${{ github.WORKSPACE }}
+
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Update AssemblyInfo.cs files
+      run: |
+        $files = Get-ChildItem "${{ github.WORKSPACE }}" -recurse -include "*Properties*" |
+            ?{ $_.PSIsContainer } |
+            foreach { Get-ChildItem -Path $_.FullName -Recurse -include AssemblyInfo.* }
+        if (-not $files)
+        {
+            Write-Host "Didn't find any files to update."
+            exit 1
+        }
+        else
+        {
+            foreach ($file in $files) {
+                $filecontent = Get-Content($file)
+                attrib $file -r
+                $filecontent -replace "\d+\.\d+\.\d+\.\d+", "${{ env.VERSION }}" | Out-File $file
+                Write-Host "Version applied to '$file'"
+            }
+        }
+
+    - name: Update vsixmanifest files
+      run: |
+        $files = Get-ChildItem "${{ github.WORKSPACE }}" -recurse -include "source.extension.vsixmanifest"
+        if (-not $files)
+        {
+            Write-Host "Didn't find any files to update."
+            exit 1
+        }
+        else
+        {
+            foreach ($file in $files) {
+                $xml = [xml](Get-Content($file))
+                attrib $file -r
+
+                $node = $xml.PackageManifest.Metadata.Identity
+                $node.Version = "${{ env.VERSION }}"
+
+                $xml.Save($file)
+                Write-Host "Version applied to '$file'"
+            }
+        }
+
+    # Add  MSBuild to the PATH: https://github.com/microsoft/setup-msbuild
+    - name: Setup MSBuild.exe
+      uses: microsoft/setup-msbuild@v1.0.2
+
+    - name: Setup VSTest
+      uses: darenm/Setup-VSTest@v1
+
+    - name: Build
+      run: msbuild ".\DiffFinder.sln" /restore /p:Configuration=${{ matrix.Configuration }} /p:Platform="Any CPU"
+
+    - name: Test
+      run: vstest.console.exe "DiffFinder.Tests\bin\${{ matrix.Configuration }}\net472\DiffFinder.Tests.dll"
+
+    # Upload the VSIX package: https://github.com/marketplace/actions/upload-a-build-artifact
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: DiffFinder-${{ env.VERSION }} ${{ matrix.Configuration }}
+        path: DiffFinder\bin\${{ matrix.Configuration }}\DiffFinder.vsix
+        if-no-files-found: error
+
+    - name: Publish 2026 extension to Open VSIX
+      if: ${{ matrix.Configuration == 'Release' && github.event.inputs.openvsix == 'true' }}
+      run: |
+        [Reflection.Assembly]::LoadWithPartialName("System.Web") | Out-Null
+        $vsixFile = "DiffFinder\bin\${{ matrix.Configuration }}\DiffFinder.vsix"
+        $url = "https://www.vsixgallery.com/api/upload"
+        [byte[]]$bytes = [System.IO.File]::ReadAllBytes($vsixFile)
+
+        try {
+            $webclient = New-Object System.Net.WebClient
+            $webclient.UploadFile($url, $vsixFile) | Out-Null
+            'OK' | Write-Host -ForegroundColor Green
+        }
+        catch{
+            'FAIL' | Write-Error
+            $_.Exception.Response.Headers["x-error"] | Write-Error
+        }
+
+    - name: Publish DiffFinder extension to Marketplace
+      if: ${{ matrix.Configuration == 'Release' && github.event.inputs.release == 'true' }}
+      uses: cezarypiatek/VsixPublisherAction@0.2
+      with:
+        extension-file: DiffFinder\bin\${{ matrix.Configuration }}\DiffFinder.vsix
+        publish-manifest-file: publishManifest.json
+        personal-access-code: ${{ secrets.VS_PUBLISHER_ACCESS_TOKEN }}

@@ -1,0 +1,15 @@
+{
+  "$schema": "http://json.schemastore.org/vsix-publish",
+  "categories": [
+    "Coding",
+    "Other"
+  ],
+  "identity": {
+    "internalName": "DiffFinder-VS2026"
+  },
+  "overview": "README.md",
+  "priceCategory": "free",
+  "publisher": "RamiAbughazaleh",
+  "private": false,
+  "qna": true
+}
