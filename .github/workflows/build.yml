@@ -2,11 +2,11 @@ name: Build
 
 on:
   push:
-    branches: [ master ]
+    branches: [ dev ]
   pull_request:
-    branches: [ master ]
+    branches: [ dev ]
   workflow_dispatch:
-    branches: [ master ]
+    branches: [ dev ]
     inputs:
       release:
         description: 'Publish 2026 extension to Visual Studio Marketplace?'

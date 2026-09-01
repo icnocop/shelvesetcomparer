@@ -1,11 +1,27 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 15
-VisualStudioVersion = 15.0.27130.2036
+# Visual Studio Version 18
+VisualStudioVersion = 18.9.12112.369 stable
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DiffFinder", "DiffFinder\DiffFinder.csproj", "{7C432ACE-1D8C-4E09-A18F-6B8B1C96D445}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DiffFinder.Tests", "DiffFinder.Tests\DiffFinder.Tests.csproj", "{2F1E8C4B-7A63-4D95-9C0E-3B5A6D8E1F27}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{84DFC853-4D1D-4326-8AF6-D28DFD5C5F56}"
+	ProjectSection(SolutionItems) = preProject
+		.gitattributes = .gitattributes
+		.gitignore = .gitignore
+		LICENSE = LICENSE
+		publishManifest.json = publishManifest.json
+		README.md = README.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".github", ".github", "{BFC14520-748D-4F7A-898F-A08FD6EA2A44}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "workflows", "workflows", "{EC18803B-3FA5-4A8B-82FE-332CBC9C8CFE}"
+	ProjectSection(SolutionItems) = preProject
+		.github\workflows\build.yml = .github\workflows\build.yml
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -24,6 +40,9 @@ Global
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{EC18803B-3FA5-4A8B-82FE-332CBC9C8CFE} = {BFC14520-748D-4F7A-898F-A08FD6EA2A44}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {A2B605CE-F301-43DD-8668-5A3B219BCC41}
