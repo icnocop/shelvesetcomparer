@@ -1,15 +1,14 @@
 ﻿// <copyright file="SelectShelvesetTeamExplorerView.xaml.cs" company="https://github.com/rajeevboobna/CompareShelvesets">Copyright https://github.com/rajeevboobna/CompareShelvesets. All Rights Reserved. This code released under the terms of the Microsoft Public License (MS-PL, http://opensource.org/licenses/ms-pl.html.) This is sample code only, do not use in production environments.</copyright>
 
 using EnvDTE;
-using Microsoft.TeamFoundation.Client;
-using Microsoft.TeamFoundation.Framework.Client;
-using Microsoft.TeamFoundation.Framework.Common;
 using Microsoft.TeamFoundation.VersionControl.Client;
-using Microsoft.VisualStudio.Shell.Interop;
 using System;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Threading;
 
 namespace DiffFinder
 {
@@ -19,6 +18,12 @@ namespace DiffFinder
     public partial class SelectShelvesetTeamExplorerView
     {
         /// <summary>
+        /// Set while the selection of the shelveset list is being restored, so that the selection changes
+        /// this causes are not mistaken for the user picking shelvesets.
+        /// </summary>
+        private bool restoringSelection;
+
+        /// <summary>
         /// Initializes a new instance of the SelectShelvesetTeamExplorerView class
         /// </summary>
         /// <param name="parentSection">Reference to the Team Explorer section where the view is initialized.</param>
@@ -27,6 +32,12 @@ namespace DiffFinder
             this.InitializeComponent();
             this.ParentSection = parentSection;
             this.DataContext = this;
+
+            // the shelvesets remember whether they were selected, so whenever the list is replaced - which
+            // includes the section restoring the list it was left with - the selection is put back.
+            // The generator raises this after the new items are in place, and unlike a
+            // DependencyPropertyDescriptor it does not root the list in a static table.
+            this.ListShelvesets.ItemContainerGenerator.ItemsChanged += this.OnShelvesetsChanged;
         }
 
         /// <summary>
@@ -49,29 +60,100 @@ namespace DiffFinder
             {
                 this.ListShelvesets.SelectedItems.RemoveAt(0);
             }
+
+            if (this.restoringSelection || e == null)
+            {
+                return;
+            }
+
+            // record the selection on the shelvesets themselves, so that it survives the section being
+            // recreated when navigating away and back
+            foreach (var item in e.RemovedItems.OfType<ShelvesetViewModel>())
+            {
+                item.IsSelected = false;
+            }
+
+            foreach (var item in e.AddedItems.OfType<ShelvesetViewModel>())
+            {
+                item.IsSelected = true;
+            }
         }
 
         /// <summary>
-        /// Event Handler for keying user name for the first shelveset.
+        /// Event handler for the shelveset list being replaced, which happens both when the shelvesets are
+        /// listed afresh and when the section restores the list it was left with. Reselects the shelvesets
+        /// that were selected. Driving the selection from the items rather than binding ListViewItem.IsSelected
+        /// keeps it working for rows the list has virtualized away, which have no container to bind to.
         /// </summary>
-        /// <param name="sender">The first shelveset user text box</param>
+        /// <param name="sender">The item container generator of the shelveset list</param>
         /// <param name="e">The event arguments</param>
-        [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = "Eventhandler + Exceptions handled")]
-        private async void FirstShelvesetUserTextBox_KeyUp(object sender, KeyEventArgs e)
+        private void OnShelvesetsChanged(object sender, ItemsChangedEventArgs e)
+        {
+            if (this.restoringSelection)
+            {
+                return;
+            }
+
+            // the items source is bound asynchronously, so let the list settle before selecting into it
+            this.Dispatcher.BeginInvoke(new Action(this.RestoreSelection), DispatcherPriority.Background);
+        }
+
+        /// <summary>
+        /// Selects the shelvesets in the list that are marked as selected.
+        /// </summary>
+        private void RestoreSelection()
         {
             try
             {
-                this.ClearError();
-                if (e.Key == Key.Enter)
-                {
-                    if (!string.IsNullOrWhiteSpace(this.FirstShelvesetUserTextBox.Text) && this.UserIdentityExists(this.FirstShelvesetUserTextBox.Text) == false)
-                    {
-                        this.ShowError("User Account Name or display name could not be found");
-                        return;
-                    }
+                this.restoringSelection = true;
 
-                    await this.ParentSection.RefreshAsync();
+                var selected = this.ListShelvesets.Items
+                    .OfType<ShelvesetViewModel>()
+                    .Where(shelveset => shelveset.IsSelected)
+                    .Take(2)
+                    .ToList();
+
+                if (selected.Count == 0)
+                {
+                    return;
                 }
+
+                this.ListShelvesets.SelectedItems.Clear();
+                foreach (var shelveset in selected)
+                {
+                    this.ListShelvesets.SelectedItems.Add(shelveset);
+                }
+            }
+            catch (Exception)
+            {
+                this.ShowFailed();
+            }
+            finally
+            {
+                this.restoringSelection = false;
+            }
+        }
+
+        /// <summary>
+        /// Event Handler for selecting a user in one of the shelveset owner drop down lists.
+        /// Shared by both drop down lists.
+        /// </summary>
+        /// <param name="sender">The shelveset user combo box</param>
+        /// <param name="e">The event arguments</param>
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = "Eventhandler + Exceptions handled")]
+        private async void ShelvesetUserComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            try
+            {
+                // while the list of users is being refreshed the selection changes because the list is
+                // being replaced, not because the user picked somebody
+                if (this.ParentSection.IsRefreshingUsers)
+                {
+                    return;
+                }
+
+                this.ClearError();
+                await this.ParentSection.RefreshAsync();
             }
             catch (Exception)
             {
@@ -80,56 +162,22 @@ namespace DiffFinder
         }
 
         /// <summary>
-        /// Event Handler for keying user name for the second shelveset.
+        /// Event Handler for the refresh users button.
         /// </summary>
-        /// <param name="sender">The second shelveset user text box</param>
-        /// <param name="e">The event arguments</param>
+        /// <param name="sender">The refresh users button</param>
+        /// <param name="e">Event parameters</param>
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = "Eventhandler + Exceptions handled")]
-        private async void SecondShelvesetUserTextBox_KeyUp(object sender, KeyEventArgs e)
+        private async void RefreshUsersButton_Click(object sender, RoutedEventArgs e)
         {
             try
             {
                 this.ClearError();
-                if (e.Key == Key.Enter)
-                {
-                    if (!string.IsNullOrWhiteSpace(this.SecondShelvesetUserTextBox.Text) && this.UserIdentityExists(this.SecondShelvesetUserTextBox.Text) == false)
-                    {
-                        this.ShowError("User Account Name or display name could not be found");
-                        return;
-                    }
-
-                    await this.ParentSection.RefreshAsync();
-                }
+                await this.ParentSection.RefreshUsersAsync();
             }
             catch (Exception)
             {
                 this.ShowFailed();
             }
-        }
-
-        /// <summary>
-        /// Returns whether the user identity of the given account name or display name exists or not
-        /// </summary>
-        /// <param name="userDisplayNameOrAccount">The given account name or display name</param>
-        /// <returns>True if the given user account or display name exists. False otherwise</returns>
-        private bool UserIdentityExists(string userDisplayNameOrAccount)
-        {
-            ITeamFoundationContext context = this.ParentSection.Context;
-            IIdentityManagementService ims = context.TeamProjectCollection.GetService<IIdentityManagementService>();
-
-            // First try search by AccountName 
-            TeamFoundationIdentity userIdentity = ims.ReadIdentity(IdentitySearchFactor.AccountName, userDisplayNameOrAccount, MembershipQuery.None, ReadIdentityOptions.ExtendedProperties);
-            if (userIdentity == null)
-            {
-                // Next we try search by DisplayName
-                userIdentity = ims.ReadIdentity(IdentitySearchFactor.DisplayName, userDisplayNameOrAccount, MembershipQuery.None, ReadIdentityOptions.ExtendedProperties);
-                if (userIdentity == null)
-                {
-                    return false;
-                }
-            }
-
-            return true;
         }
 
         private void ShowFailed([System.Runtime.CompilerServices.CallerMemberName] string caller = null)
@@ -268,10 +316,15 @@ namespace DiffFinder
         /// <param name="e">Event arguments</param>
         private void ListShelvesets_MouseDoubleClick(object sender, MouseButtonEventArgs e)
         {
-            if (e != null && e.ChangedButton == MouseButton.Left && this.ListShelvesets.SelectedItems.Count == 1)
+            if (e == null || e.ChangedButton != MouseButton.Left)
             {
-                this.ViewShelvesetDetails(this.ListShelvesets);
+                return;
             }
+
+            // the list selects with Multiple mode, where a click toggles, so the selection after a double
+            // click depends on what was selected before it. Use the row that was actually clicked instead.
+            var container = ItemsControl.ContainerFromElement(this.ListShelvesets, e.OriginalSource as DependencyObject) as ListViewItem;
+            this.ViewShelvesetDetails(CastAsShelveset(container?.DataContext));
         }
        
         /// <summary>
@@ -283,23 +336,31 @@ namespace DiffFinder
         {
             if (e != null && e.Key == Key.Enter && this.ListShelvesets.SelectedItems.Count == 1)
             {
-                this.ViewShelvesetDetails(this.ListShelvesets);
+                this.ViewShelvesetDetails(CastAsShelveset(this.ListShelvesets.SelectedItems[0]));
             }
         }
-        
+
         /// <summary>
         /// Opens up the shelveset details team explorer page for given shelveset
         /// </summary>
-        /// <param name="listView">The listView control to read selected shelveset from</param>
-        private void ViewShelvesetDetails(ListView listView)
+        /// <param name="shelveset">The shelveset to show the details of. Ignored when null.</param>
+        private void ViewShelvesetDetails(Shelveset shelveset)
         {
-            if (listView.SelectedItems.Count == 1)
+            if (shelveset == null)
             {
-                var shelveset = CastAsShelveset(listView.SelectedItems[0]);
-                if (shelveset != null)
-                {
-                    this.ParentSection.ViewShelvesetDetails(shelveset);
-                }
+                return;
+            }
+
+            try
+            {
+                this.ClearError();
+                this.ParentSection.ViewShelvesetDetails(shelveset);
+            }
+            catch (Exception ex)
+            {
+                // the navigation used to fail silently, which gave no clue why a shelveset would not open
+                ShelvesetComparer.Instance?.OutputPaneWriteLine(ex.ToString());
+                this.ShowError($"Failed to open the details of shelveset '{shelveset.Name}' owned by '{shelveset.OwnerName}': {ex.Message}");
             }
         }
 

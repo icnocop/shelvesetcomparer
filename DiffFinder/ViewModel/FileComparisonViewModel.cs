@@ -53,9 +53,10 @@ namespace DiffFinder
         }
 
         /// <summary>
-        /// Gets or sets the Color of text.
+        /// Gets or sets how the file compares to its counterpart in the other shelveset. The comparison
+        /// summary colors the row from it, picking a color readable in the current Visual Studio theme.
         /// </summary>
-        public string Color { get; set; }
+        public FileComparisonStatus Status { get; set; }
 
         /// <summary>
         /// Returns the full file path of the pending change file.

@@ -8,6 +8,10 @@
              Name="DifFinder"
              HorizontalAlignment="Stretch"
              xmlns:tfscontrols="clr-namespace:Microsoft.TeamFoundation.Controls.WPF;assembly=Microsoft.TeamFoundation.Controls"
+             xmlns:vsui="clr-namespace:Microsoft.VisualStudio.PlatformUI;assembly=Microsoft.VisualStudio.Shell.15.0"
+             Background="{DynamicResource {x:Static vsui:EnvironmentColors.ToolWindowBackgroundBrushKey}}"
+             Foreground="{DynamicResource {x:Static vsui:EnvironmentColors.ToolWindowTextBrushKey}}"
+             TextElement.Foreground="{DynamicResource {x:Static vsui:EnvironmentColors.ToolWindowTextBrushKey}}"
              DataContext="{Binding RelativeSource={RelativeSource Self}}">
     <UserControl.Resources>
         <ResourceDictionary Source="/DiffFinder;component/Resources/ResourceDictionary.xaml"/>
@@ -60,39 +64,19 @@
     </Grid>
 
     <ListView Grid.Row="2" HorizontalAlignment="Stretch" Name="ComparisonFiles" ItemsSource="{Binding ComparisonModel.Files, ElementName=DifFinder}" MouseDoubleClick="ComparisonFiles_MouseDoubleClick" KeyUp="ComparisonFiles_KeyUp" SelectionMode="Single">
-      <ListView.Resources>
-        <Style x:Key="backgroundSelected" TargetType="{x:Type ListViewItem}">
-          <Style.Triggers>
-            <Trigger Property="IsSelected" Value="true">
-              <Setter Property="Background" Value="LightYellow" />
-            </Trigger>
-            <Trigger Property="IsSelected" Value="false">
-              <Setter Property="Background" Value="White" />
-            </Trigger>            
-          </Style.Triggers>
-        </Style>
-      </ListView.Resources>
       <ListView.View>
         <GridView>
           <GridViewColumn Header="First Shelveset" Width="Auto">
             <GridViewColumn.CellTemplate>
               <DataTemplate>
-                <TextBlock x:Name="FirstFileNameTxt" Text="{Binding Path=FirstFileDisplayName}">
-                  <TextBlock.Foreground>
-                    <SolidColorBrush Color="{Binding Path=Color}" />
-                  </TextBlock.Foreground>
-                </TextBlock>
+                <TextBlock x:Name="FirstFileNameTxt" Text="{Binding Path=FirstFileDisplayName}" Style="{StaticResource ComparisonFileTextStyle}" />
               </DataTemplate>
             </GridViewColumn.CellTemplate>
           </GridViewColumn>
           <GridViewColumn Header="Second Shelveset" Width="Auto">
             <GridViewColumn.CellTemplate>
               <DataTemplate>
-                <TextBlock x:Name="SecondFileNameTxt" Text="{Binding Path=SecondFileDisplayName}">
-                  <TextBlock.Foreground>
-                    <SolidColorBrush Color="{Binding Path=Color}" />
-                  </TextBlock.Foreground>
-                </TextBlock>
+                <TextBlock x:Name="SecondFileNameTxt" Text="{Binding Path=SecondFileDisplayName}" Style="{StaticResource ComparisonFileTextStyle}" />
               </DataTemplate>
             </GridViewColumn.CellTemplate>
           </GridViewColumn>

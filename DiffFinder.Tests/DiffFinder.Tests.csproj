@@ -11,12 +11,26 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="Moq" Version="4.20.72" />
     <PackageReference Include="MSTest.TestAdapter" Version="3.6.1" />
     <PackageReference Include="MSTest.TestFramework" Version="3.6.1" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\DiffFinder\DiffFinder.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The extension marks these Private=false because the IDE supplies them at run time, so they do not
+         flow through the project reference. The tests run outside the IDE and need them copied locally. -->
+    <Reference Include="Microsoft.TeamFoundation.Common">
+      <HintPath>..\ReferenceVS2026\Microsoft.TeamFoundation.Common.dll</HintPath>
+      <SpecificVersion>False</SpecificVersion>
+    </Reference>
+    <Reference Include="Microsoft.TeamFoundation.VersionControl.Client">
+      <HintPath>..\ReferenceVS2026\Microsoft.TeamFoundation.VersionControl.Client.dll</HintPath>
+      <SpecificVersion>False</SpecificVersion>
+    </Reference>
   </ItemGroup>
 
 </Project>

@@ -28,6 +28,8 @@
     <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
     <GeneratePkgDefFile>true</GeneratePkgDefFile>
     <IncludeAssemblyInVSIXContainer>true</IncludeAssemblyInVSIXContainer>
+    <!-- The Team Explorer assemblies referenced below are resolved from the IDE at run time; never ship copies. -->
+    <IncludeCopyLocalReferencesInVSIXContainer>false</IncludeCopyLocalReferencesInVSIXContainer>
     <IncludeDebugSymbolsInVSIXContainer>false</IncludeDebugSymbolsInVSIXContainer>
     <IncludeDebugSymbolsInLocalVSIXDeployment>false</IncludeDebugSymbolsInLocalVSIXDeployment>
     <CopyBuildOutputToOutputDirectory>true</CopyBuildOutputToOutputDirectory>
@@ -41,7 +43,7 @@
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
     <OutputPath>bin\Debug\</OutputPath>
-    <DefineConstants>TRACE;DEBUG;StubbingWithoutServer</DefineConstants>
+    <DefineConstants>TRACE;DEBUG</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
@@ -76,9 +78,13 @@
     <Compile Include="TeamExplorer\ShelvesetComparerPage.cs" />
     <Compile Include="ViewModel\IPendingChange.cs" />
     <Compile Include="ViewModel\PendingChangeFacade.cs" />
-    <Compile Include="ViewModel\PendingChangeFacadeStub.cs" />
+    <Compile Include="ViewModel\PendingChangeMatcher.cs" />
     <Compile Include="ViewModel\ShelvesetViewModel.cs" />
     <Compile Include="TeamExplorer\ShelvesetsContext.cs" />
+    <Compile Include="TeamExplorer\UserListBuilder.cs" />
+    <Compile Include="ViewExtensions\ComparisonStatusColors.cs" />
+    <Compile Include="ViewExtensions\EmptyStringToPlaceholderConverter.cs" />
+    <Compile Include="ViewModel\FileComparisonStatus.cs" />
     <Compile Include="ViewExtensions\UserControlMaxHeightMultiValueConverter.cs" />
     <Compile Include="ViewExtensions\GridViewSorter.cs" />
     <Compile Include="ViewExtensions\SortGlyphAdorner.cs" />
@@ -119,26 +125,32 @@
     <Reference Include="Microsoft.TeamFoundation.Client, Version=16.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\ReferenceVS2026\Microsoft.TeamFoundation.Client.dll</HintPath>
+      <Private>false</Private>
     </Reference>
     <Reference Include="Microsoft.TeamFoundation.Common, Version=16.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\ReferenceVS2026\Microsoft.TeamFoundation.Common.dll</HintPath>
+      <Private>false</Private>
     </Reference>
     <Reference Include="Microsoft.TeamFoundation.Controls, Version=16.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\ReferenceVS2026\Microsoft.TeamFoundation.Controls.dll</HintPath>
+      <Private>false</Private>
     </Reference>
     <Reference Include="Microsoft.TeamFoundation.VersionControl.Client, Version=16.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\ReferenceVS2026\Microsoft.TeamFoundation.VersionControl.Client.dll</HintPath>
+      <Private>false</Private>
     </Reference>
     <Reference Include="Microsoft.VisualStudio.TeamFoundation, Version=16.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\ReferenceVS2026\Microsoft.VisualStudio.TeamFoundation.dll</HintPath>
+      <Private>false</Private>
     </Reference>
     <Reference Include="Microsoft.TeamFoundation.VersionControl.Controls, Version=16.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\ReferenceVS2026\Microsoft.TeamFoundation.VersionControl.Controls.dll</HintPath>
+      <Private>false</Private>
     </Reference>
     <Reference Include="PresentationCore" />
     <Reference Include="PresentationFramework" />

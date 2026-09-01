@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011" xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
     <Metadata>
-        <Identity Id="760fbf1f-7603-4242-a076-f0288c860c61.VS2026" Version="1.0" Language="en-US" Publisher="Rami Abughazaleh" />
+        <Identity Id="760fbf1f-7603-4242-a076-f0288c860c61.VS2026" Version="1.0.0.0" Language="en-US" Publisher="Rami Abughazaleh" />
         <DisplayName>DiffFinder for VS2026</DisplayName>
         <Description xml:space="preserve">The extension allows you to compare files in two shelvesets or one shelveset with pending changes.
 Based on https://github.com/rajeevboobna/CompareShelvesets by Rajeev Boobna and https://github.com/hamidshahid/shelvesetcomparer by Hamid Shahid.

@@ -4,6 +4,7 @@
                     xmlns:extensions="clr-namespace:DiffFinder">
 
   <extensions:UserControlMaxHeightMultiValueConverter x:Key="MaxHeightConverter"></extensions:UserControlMaxHeightMultiValueConverter>
+  <extensions:EmptyStringToPlaceholderConverter x:Key="EmptyStringToPlaceholderConverter"></extensions:EmptyStringToPlaceholderConverter>
 
   <!-- Theme Independent Colors -->
   <SolidColorBrush x:Key="ItemBrushKey" Color="{Binding Source={x:Static mtcw:TeamFoundationColors.Instance},Path=ItemColor,Mode=OneWay}" />
@@ -25,6 +26,49 @@
   <SolidColorBrush x:Key="ItemHoverBorderBrushKey" Color="{Binding Source={x:Static mtcw:TeamFoundationColors.Instance},Path=ItemHoverBorderColor,Mode=OneWay}" />
   <SolidColorBrush x:Key="SubduedTextBrushKey" Color="{Binding Source={x:Static mtcw:TeamFoundationColors.Instance},Path=SubduedTextColor,Mode=OneWay}" />
 
+  <!-- Comparison summary file state colors, picked from the current Visual Studio theme -->
+  <SolidColorBrush x:Key="ComparisonMatchingBrushKey" Color="{Binding Source={x:Static extensions:ComparisonStatusColors.Instance},Path=MatchingColor,Mode=OneWay}" />
+  <SolidColorBrush x:Key="ComparisonDifferentBrushKey" Color="{Binding Source={x:Static extensions:ComparisonStatusColors.Instance},Path=DifferentColor,Mode=OneWay}" />
+  <SolidColorBrush x:Key="ComparisonNoMatchBrushKey" Color="{Binding Source={x:Static extensions:ComparisonStatusColors.Instance},Path=NoMatchColor,Mode=OneWay}" />
+
+  <!-- Foreground of a comparison summary row, by file state -->
+  <Style x:Key="ComparisonFileTextStyle" TargetType="{x:Type TextBlock}">
+    <Setter Property="TextBlock.Foreground" Value="{StaticResource ComparisonMatchingBrushKey}" />
+    <Setter Property="TextBlock.TextTrimming" Value="CharacterEllipsis" />
+    <Style.Triggers>
+      <DataTrigger Binding="{Binding Path=Status}" Value="Different">
+        <Setter Property="TextBlock.Foreground" Value="{StaticResource ComparisonDifferentBrushKey}" />
+      </DataTrigger>
+      <DataTrigger Binding="{Binding Path=Status}" Value="NoMatch">
+        <Setter Property="TextBlock.Foreground" Value="{StaticResource ComparisonNoMatchBrushKey}" />
+      </DataTrigger>
+    </Style.Triggers>
+  </Style>
+
+  <!-- GridViewColumnHeader Style. The default WPF header chrome is a light gray that does not follow the
+       Visual Studio theme, which makes the headers unreadable in the dark themes. -->
+  <Style TargetType="{x:Type GridViewColumnHeader}">
+    <Setter Property="Control.Background" Value="{StaticResource ItemBrushKey}" />
+    <Setter Property="Control.Foreground" Value="{StaticResource ItemTextBrushKey}" />
+    <Setter Property="Control.Padding" Value="4,2" />
+    <Setter Property="Control.HorizontalContentAlignment" Value="Left" />
+    <Setter Property="Control.Template">
+      <Setter.Value>
+        <ControlTemplate ControlTemplate.TargetType="{x:Type GridViewColumnHeader}">
+          <Border Border.Name="Bd" UIElement.SnapsToDevicePixels="True" Border.Background="{StaticResource ItemBrushKey}" TextElement.Foreground="{StaticResource ItemTextBrushKey}" Border.BorderBrush="{StaticResource ItemBorderBrushKey}" Border.BorderThickness="0,0,1,1" Border.Padding="{TemplateBinding Control.Padding}">
+            <ContentPresenter HorizontalAlignment="{TemplateBinding Control.HorizontalContentAlignment}" VerticalAlignment="Center" UIElement.SnapsToDevicePixels="{TemplateBinding UIElement.SnapsToDevicePixels}" />
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Trigger.Property="UIElement.IsMouseOver" Trigger.Value="True">
+              <Setter TargetName="Bd" Value="{StaticResource ItemHoverBrushKey}" Property="Border.Background" />
+              <Setter TargetName="Bd" Value="{StaticResource ItemHoverTextBrushKey}" Property="TextElement.Foreground" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
   <Style x:Key="TextBlockStyle"  TargetType="{x:Type TextBlock}">
     <Setter Property="Control.Background" Value="{StaticResource ItemBrushKey}" />
     <Setter Property="Control.Foreground" Value="{StaticResource ItemTextBrushKey}" />
@@ -43,6 +87,119 @@
       <Setter Property="Control.HorizontalContentAlignment" Value="{Binding HorizontalContentAlignment,RelativeSource={RelativeSource AncestorType={x:Type ItemsControl}}}" />
       <Setter Property="Control.VerticalContentAlignment" Value="{Binding VerticalContentAlignment,RelativeSource={RelativeSource AncestorType={x:Type ItemsControl}}}" />
       <Setter Property="FrameworkElement.Margin" Value="0" />
+  </Style>
+
+  <!-- Item template of the shelveset owner drop down lists. The items are plain strings, the empty one
+       being the "no user selected" entry, which is rendered as readable text instead of a blank row. -->
+  <DataTemplate x:Key="UserItemTemplate">
+    <TextBlock Text="{Binding Converter={StaticResource EmptyStringToPlaceholderConverter}, ConverterParameter='(none)'}" TextTrimming="CharacterEllipsis" />
+  </DataTemplate>
+
+  <!-- ComboBox drop down arrow, the chrome of the closed ComboBox -->
+  <ControlTemplate x:Key="ComboBoxToggleButtonTemplate" TargetType="{x:Type ToggleButton}">
+    <Border Border.Name="Bd" UIElement.SnapsToDevicePixels="True" Border.Background="{StaticResource ItemBrushKey}" Border.BorderBrush="{StaticResource ItemBorderBrushKey}" Border.BorderThickness="1">
+      <Grid>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="16" />
+        </Grid.ColumnDefinitions>
+        <Path Path.Name="Arrow" Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center" Path.Data="M 0 0 L 7 0 L 3.5 4 Z" Shape.Fill="{StaticResource ItemTextBrushKey}" />
+      </Grid>
+    </Border>
+    <ControlTemplate.Triggers>
+      <Trigger Trigger.Property="UIElement.IsMouseOver" Trigger.Value="True">
+        <Setter TargetName="Bd" Value="{StaticResource ItemHoverBrushKey}" Property="Border.Background" />
+        <Setter TargetName="Bd" Value="{StaticResource ItemHoverBorderBrushKey}" Property="Border.BorderBrush" />
+        <Setter TargetName="Arrow" Value="{StaticResource ItemHoverTextBrushKey}" Property="Shape.Fill" />
+      </Trigger>
+      <Trigger Trigger.Property="UIElement.IsEnabled" Trigger.Value="False">
+        <Setter TargetName="Arrow" Value="{StaticResource SubduedTextBrushKey}" Property="Shape.Fill" />
+      </Trigger>
+    </ControlTemplate.Triggers>
+  </ControlTemplate>
+
+  <!-- ComboBox Style. The default WPF chrome ignores Background and Foreground, so the control has to be
+       retemplated for the drop down lists to follow the Visual Studio theme. -->
+  <Style x:Key="ComboBoxStyle" TargetType="{x:Type ComboBox}">
+    <Setter Property="Control.Background" Value="{StaticResource ItemBrushKey}" />
+    <Setter Property="Control.Foreground" Value="{StaticResource ItemTextBrushKey}" />
+    <Setter Property="Control.BorderBrush" Value="{StaticResource ItemBorderBrushKey}" />
+    <Setter Property="Control.BorderThickness" Value="1" />
+    <!-- the right padding keeps the selected item clear of the drop down arrow -->
+    <Setter Property="Control.Padding" Value="4,0,18,0" />
+    <Setter Property="Control.VerticalContentAlignment" Value="Center" />
+    <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Auto" />
+    <Setter Property="Control.Template">
+      <Setter.Value>
+        <ControlTemplate ControlTemplate.TargetType="{x:Type ComboBox}">
+          <Grid>
+            <ToggleButton Control.Template="{StaticResource ComboBoxToggleButtonTemplate}" ButtonBase.ClickMode="Press" UIElement.Focusable="False"
+                          ToggleButton.IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}" />
+            <ContentPresenter ContentPresenter.Name="ContentSite" UIElement.IsHitTestVisible="False" FrameworkElement.Margin="{TemplateBinding Control.Padding}"
+                              ContentPresenter.Content="{TemplateBinding ComboBox.SelectionBoxItem}"
+                              ContentPresenter.ContentTemplate="{TemplateBinding ComboBox.SelectionBoxItemTemplate}"
+                              ContentPresenter.ContentStringFormat="{TemplateBinding ComboBox.SelectionBoxItemStringFormat}"
+                              HorizontalAlignment="Left" VerticalAlignment="Center"
+                              TextElement.Foreground="{TemplateBinding Control.Foreground}" />
+            <Popup Popup.Name="PART_Popup" Popup.AllowsTransparency="True" Popup.Placement="Bottom" UIElement.Focusable="False"
+                   Popup.IsOpen="{TemplateBinding ComboBox.IsDropDownOpen}">
+              <Border UIElement.SnapsToDevicePixels="True" Border.Background="{StaticResource ItemBrushKey}" Border.BorderBrush="{StaticResource ItemBorderBrushKey}" Border.BorderThickness="1"
+                      FrameworkElement.MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"
+                      FrameworkElement.MaxHeight="{TemplateBinding ComboBox.MaxDropDownHeight}">
+                <ScrollViewer>
+                  <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Contained" UIElement.SnapsToDevicePixels="True" />
+                </ScrollViewer>
+              </Border>
+            </Popup>
+          </Grid>
+          <ControlTemplate.Triggers>
+            <Trigger Trigger.Property="UIElement.IsEnabled" Trigger.Value="False">
+              <Setter TargetName="ContentSite" Value="{StaticResource SubduedTextBrushKey}" Property="TextElement.Foreground" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- ComboBoxItem Style -->
+  <Style TargetType="{x:Type ComboBoxItem}">
+    <Setter Property="Control.Background" Value="{StaticResource ItemBrushKey}" />
+    <Setter Property="Control.Foreground" Value="{StaticResource ItemTextBrushKey}" />
+    <Setter Property="Control.Padding" Value="4,2" />
+    <Setter Property="Control.HorizontalContentAlignment" Value="Left" />
+    <Setter Property="Control.VerticalContentAlignment" Value="Center" />
+    <Setter Property="Control.Template">
+      <Setter.Value>
+        <ControlTemplate ControlTemplate.TargetType="{x:Type ComboBoxItem}">
+          <Border Border.Name="Bd" UIElement.SnapsToDevicePixels="True" Border.Background="{StaticResource ItemBrushKey}" TextElement.Foreground="{StaticResource ItemTextBrushKey}" Border.BorderThickness="0" Border.Padding="{TemplateBinding Control.Padding}">
+            <ContentPresenter HorizontalAlignment="{TemplateBinding Control.HorizontalContentAlignment}" VerticalAlignment="{TemplateBinding Control.VerticalContentAlignment}" UIElement.SnapsToDevicePixels="{TemplateBinding UIElement.SnapsToDevicePixels}" />
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Trigger.Property="ComboBoxItem.IsHighlighted" Trigger.Value="True">
+              <Setter TargetName="Bd" Value="{StaticResource ItemHoverBrushKey}" Property="Border.Background" />
+              <Setter TargetName="Bd" Value="{StaticResource ItemHoverTextBrushKey}" Property="TextElement.Foreground" />
+            </Trigger>
+            <Trigger Trigger.Property="ComboBoxItem.IsSelected" Trigger.Value="True">
+              <Setter TargetName="Bd" Value="{StaticResource ItemSelectedBrushKey}" Property="Border.Background" />
+              <Setter TargetName="Bd" Value="{StaticResource ItemSelectedTextBrushKey}" Property="TextElement.Foreground" />
+            </Trigger>
+            <Trigger Trigger.Property="UIElement.IsEnabled" Trigger.Value="False">
+              <Setter TargetName="Bd" Value="{StaticResource SubduedTextBrushKey}" Property="TextElement.Foreground" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- ListView Style. Without this the control keeps the WPF default background of SystemColors.Window,
+       which is white: the themed item style only paints the rows, so an empty or partly filled list shows
+       white behind them in the dark themes. Transparent lets the themed container background show through. -->
+  <Style TargetType="{x:Type ListView}">
+    <Setter Property="Control.Background" Value="Transparent" />
+    <Setter Property="Control.Foreground" Value="{StaticResource ItemTextBrushKey}" />
+    <Setter Property="Control.BorderBrush" Value="{StaticResource ItemBorderBrushKey}" />
   </Style>
 
   <!-- ListViewItem Style -->

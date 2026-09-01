@@ -2,7 +2,9 @@
 
 
 using Microsoft.VisualStudio.Shell;
+using Microsoft.VisualStudio.Shell.Interop;
 using Microsoft.Win32;
+using System;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
@@ -91,17 +93,16 @@ namespace DiffFinder
         /// <param name="compareFiles">The compare files view model</param>
         private static void CompareFiles(FileComparisonViewModel compareFiles)
         {
-            GetFileToCompare(compareFiles.FirstFileDisplayName, compareFiles.FirstFile, out var firstFileName, out var extension, out var firstDisplayName);
-            GetFileToCompare(compareFiles.SecondFileDisplayName, compareFiles.SecondFile, out var secondFileName, out extension, out var secondDisplayName);
+            ThreadHelper.ThrowIfNotOnUIThread();
+
+            GetFileToCompare(compareFiles.FirstFileDisplayName, compareFiles.FirstFile, out var firstFileName, out var extension, out var firstDisplayName, out var firstIsTemporary);
+            GetFileToCompare(compareFiles.SecondFileDisplayName, compareFiles.SecondFile, out var secondFileName, out extension, out var secondDisplayName, out var secondIsTemporary);
 
             GetExternalTool(extension, out var diffToolCommand, out var diffToolCommandArguments);
 
             if (string.IsNullOrWhiteSpace(diffToolCommand))
             {
-                var currentProcess = Process.GetCurrentProcess();
-                currentProcess.StartInfo.FileName = currentProcess.Modules[0].FileName;
-                currentProcess.StartInfo.Arguments = string.Format(CultureInfo.CurrentCulture, @"/diff ""{0}"" ""{1}"" ""{2}"" ""{3}""", firstFileName, secondFileName, firstDisplayName, secondDisplayName);
-                currentProcess.Start();
+                OpenVisualStudioDiff(firstFileName, secondFileName, firstDisplayName, secondDisplayName, firstIsTemporary, secondIsTemporary);
             }
             else
             {
@@ -122,15 +123,17 @@ namespace DiffFinder
             }
         }
 
-        private static void GetFileToCompare(string localFilePath, IPendingChange pendingChange, out string fileToDiff, out string extension, out string displayName)
+        private static void GetFileToCompare(string localFilePath, IPendingChange pendingChange, out string fileToDiff, out string extension, out string displayName, out bool isTemporary)
         {
             fileToDiff = localFilePath;
             displayName = fileToDiff;
             extension = null;
+            isTemporary = false;
             if (! File.Exists(fileToDiff))
             {
                 // if not existing locally, then use temp file for comparison and download server item
                 fileToDiff = Path.GetTempFileName();
+                isTemporary = true;
                 if (pendingChange != null)
                 {
                     pendingChange.DownloadShelvedFile(fileToDiff);
@@ -142,6 +145,52 @@ namespace DiffFinder
             {
                 extension = Path.GetExtension(fileToDiff);
             }
+        }
+
+        /// <summary>
+        /// Opens the two files in the difference window of the Visual Studio instance the extension is
+        /// running in. Launching devenv.exe /diff instead would hand the comparison to whichever instance
+        /// happens to be registered, which is not necessarily this one.
+        /// </summary>
+        /// <param name="firstFileName">The path of the first file</param>
+        /// <param name="secondFileName">The path of the second file</param>
+        /// <param name="firstDisplayName">The label of the first file</param>
+        /// <param name="secondDisplayName">The label of the second file</param>
+        /// <param name="firstIsTemporary">Whether the first file is a temporary file Visual Studio may delete</param>
+        /// <param name="secondIsTemporary">Whether the second file is a temporary file Visual Studio may delete</param>
+        private static void OpenVisualStudioDiff(string firstFileName, string secondFileName, string firstDisplayName, string secondDisplayName, bool firstIsTemporary, bool secondIsTemporary)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
+            var differenceService = Package.GetGlobalService(typeof(SVsDifferenceService)) as IVsDifferenceService;
+            if (differenceService == null)
+            {
+                throw new InvalidOperationException("The Visual Studio difference service is not available.");
+            }
+
+            var caption = string.Format(CultureInfo.CurrentCulture, "{0} vs. {1}", Path.GetFileName(firstDisplayName), Path.GetFileName(secondDisplayName));
+
+            uint options = 0;
+            if (firstIsTemporary)
+            {
+                options |= (uint)__VSDIFFSERVICEOPTIONS.VSDIFFOPT_LeftFileIsTemporary;
+            }
+
+            if (secondIsTemporary)
+            {
+                options |= (uint)__VSDIFFSERVICEOPTIONS.VSDIFFOPT_RightFileIsTemporary;
+            }
+
+            differenceService.OpenComparisonWindow2(
+                firstFileName,
+                secondFileName,
+                caption,
+                $"{firstDisplayName}\r\n{secondDisplayName}",
+                firstDisplayName,
+                secondDisplayName,
+                null,
+                null,
+                options);
         }
 
         /// <summary>
