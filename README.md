@@ -1,4 +1,4 @@
-# DiffFinder
+# Diff Finder for Visual Studio 2026
 
 DiffFinder (from **[rajeevboobna / shelvesetcomparer](https://github.com/rajeevboobna/shelvesetcomparer)**) extends the existing **[hamidshahid / shelvesetcomparer](https://github.com/hamidshahid/shelvesetcomparer)** Visual Studio extension.
 ShelvesetComparer is a Visual Studio extension that allow users to compare contents of two shelvesets (from on or different users).
@@ -16,7 +16,7 @@ Color coding used in file comparison:
 
 ## VisualStudio Marketplace
 
-* [DiffFinder for VS2026 (icnocop)](https://marketplace.visualstudio.com/items?itemName=RamiAbughazaleh.DiffFinder-VS2026)
+* [DiffFinder for VS2026 (icnocop)](https://marketplace.visualstudio.com/items?itemName=RamiAbughazalehDiffFinderVS2026)
   * Fork of [dprZoft / shelvesetcomparer](https://github.com/dprZoft/shelvesetcomparer) with additional improvements, including a fix for diff tool arguments containing spaces ([dprZoft#17](https://github.com/dprZoft/shelvesetcomparer/issues/17)) and an automated GitHub Actions build.
 * [DiffFinder for VS2026](https://marketplace.visualstudio.com/items?itemName=dprZoft.DiffFinder-VS2026)
   * New release required because, although [Microsoft VS2026 tries to be backward compatible](https://devblogs.microsoft.com/visualstudio/modernizing-visual-studio-extension-compatibility-effortless-migration-for-extension-developers-and-users/), extensions which depend on VS objects (like TeamExplorer) still need to be recompiled with matching references..
@@ -32,22 +32,22 @@ Color coding used in file comparison:
 ## Examples
 
 1. Open Shelveset selection from TeamExplorer:
-![TeamExplorer Diff Finder Button](/DiffFinder/Resources/PreviewImage.png)
+![TeamExplorer Diff Finder Button](DiffFinder/Resources/PreviewImage.png)
 
 2. Select two Shelvesets for comparison or one Shelvesets to compare with current Pending Changes:
-![TeamExplorer Diff Finder Button](/DiffFinder/Resources/Example_SelectCompareShelvesets.png)
+![TeamExplorer Diff Finder Button](DiffFinder/Resources/Example_SelectCompareShelvesets.png)
 
 3. File comparison view comparing two Shelvesets:
 
    * Shelvesets with same file paths (same branch):
-![TeamExplorer Diff Finder Button](/DiffFinder/Resources/Example_CompareSameBranch.png)
+![TeamExplorer Diff Finder Button](DiffFinder/Resources/Example_CompareSameBranch.png)
 
    * Shelvesets with different paths (algorithm tries to find the best match (most common path parts)):
       * differerent branches but same relative path:
-      ![TeamExplorer Diff Finder Button](/DiffFinder/Resources/Example_CompareDifferentBranches.png)
+      ![TeamExplorer Diff Finder Button](DiffFinder/Resources/Example_CompareDifferentBranches.png)
 
       * different branches and different paths:
-      ![File comparison: different branches and folders -> tries to find best match](/DiffFinder/Resources/Example_CompareDifferentBranchesAndFolders.png)
+      ![File comparison: different branches and folders -> tries to find best match](DiffFinder/Resources/Example_CompareDifferentBranchesAndFolders.png)
 
 ## Branches and tags
 
