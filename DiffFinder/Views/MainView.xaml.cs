@@ -1,14 +1,12 @@
-﻿// <copyright file="MainView.xaml.cs" company="https://github.com/rajeevboobna/CompareShelvesets">Copyright https://github.com/rajeevboobna/CompareShelvesets. All Rights Reserved. This code released under the terms of the Microsoft Public License (MS-PL, http://opensource.org/licenses/ms-pl.html.) This is sample code only, do not use in production environments.</copyright>
+// <copyright file="MainView.xaml.cs" company="https://github.com/rajeevboobna/CompareShelvesets">Copyright https://github.com/rajeevboobna/CompareShelvesets. All Rights Reserved. This code released under the terms of the Microsoft Public License (MS-PL, http://opensource.org/licenses/ms-pl.html.) This is sample code only, do not use in production environments.</copyright>
 
 
+using Microsoft.TeamFoundation.VersionControl.Client;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
-using Microsoft.Win32;
 using System;
-using System.Diagnostics;
 using System.Globalization;
 using System.IO;
-using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -26,11 +24,6 @@ namespace DiffFinder
         private static readonly DependencyProperty ComparisonModelProperty = DependencyProperty.Register("ComparisonModel", typeof(ShelvesetComparerViewModel), typeof(MainView));
 
         /// <summary>
-        /// Keeps the visual studio version
-        /// </summary>
-        private static string visualStudioVersion = string.Empty;
-
-        /// <summary>
         /// Initializes a new instance of the MainView class.
         /// </summary>
         public MainView()
@@ -38,22 +31,6 @@ namespace DiffFinder
             this.InitializeComponent();
             this.DataContext = this;
             this.ComparisonModel = ShelvesetComparerViewModel.Instance;
-        }
-
-        /// <summary>
-        /// Gets the Visual Studio Version the extension is currently running in
-        /// </summary>
-        public static string VisualStudioVersion
-        {
-            get
-            {
-                if (string.IsNullOrWhiteSpace(visualStudioVersion))
-                {
-                    visualStudioVersion = GetVisualStudioVersionAsync().GetResultNoContext();
-                }
-
-                return visualStudioVersion;
-            }
         }
 
         /// <summary>
@@ -73,21 +50,6 @@ namespace DiffFinder
         }
 
         /// <summary>
-        /// Get Visual Studio version (enforcing Main UI Thread if required)
-        /// </summary>
-        /// <returns></returns>
-        private static async Task<string> GetVisualStudioVersionAsync()
-        {
-            if (! ThreadHelper.CheckAccess())
-            {
-                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
-            }
-
-            var dte = Package.GetGlobalService(typeof(EnvDTE.DTE)) as EnvDTE80.DTE2;
-            return dte.SourceControl.Parent.Version;
-        }
-
-        /// <summary>
         /// The method opens up a window comparing two files
         /// </summary>
         /// <param name="compareFiles">The compare files view model</param>
@@ -95,32 +57,51 @@ namespace DiffFinder
         {
             ThreadHelper.ThrowIfNotOnUIThread();
 
-            GetFileToCompare(compareFiles.FirstFileDisplayName, compareFiles.FirstFile, out var firstFileName, out var extension, out var firstDisplayName, out var firstIsTemporary);
-            GetFileToCompare(compareFiles.SecondFileDisplayName, compareFiles.SecondFile, out var secondFileName, out extension, out var secondDisplayName, out var secondIsTemporary);
+            GetFileToCompare(compareFiles.FirstFileDisplayName, compareFiles.FirstFile, out var firstFileName, out _, out var firstDisplayName, out var firstIsTemporary);
+            GetFileToCompare(compareFiles.SecondFileDisplayName, compareFiles.SecondFile, out var secondFileName, out _, out var secondDisplayName, out var secondIsTemporary);
 
-            GetExternalTool(extension, out var diffToolCommand, out var diffToolCommandArguments);
-
-            if (string.IsNullOrWhiteSpace(diffToolCommand))
+            if (ThirdPartyRunner.IsCompareToolConfigured(secondFileName))
             {
-                OpenVisualStudioDiff(firstFileName, secondFileName, firstDisplayName, secondDisplayName, firstIsTemporary, secondIsTemporary);
-            }
-            else
-            {
-                // So there is a tool configured. Let's use it
-                diffToolCommandArguments = DiffToolArgumentBuilder.Build(
-                    diffToolCommandArguments,
+                // Team Foundation owns the difference tools the user configured under Options, Source
+                // Control, Visual Studio Team Foundation Server, Configure User Tools: it resolves the one
+                // for the extension per user and per machine, handles tools implemented as an assembly
+                // rather than an executable, substitutes and quotes the arguments, and deletes the
+                // temporary files once the tool exits.
+                Difference.VisualDiffFiles(
                     firstFileName,
                     secondFileName,
                     firstDisplayName,
-                    secondDisplayName);
-                var startInfo = new ProcessStartInfo()
-                {
-                    Arguments = diffToolCommandArguments,
-                    FileName = diffToolCommand
-                };
-
-                Process.Start(startInfo);
+                    secondDisplayName,
+                    compareFiles.FirstShelveName ?? string.Empty,
+                    compareFiles.SecondShelveName ?? string.Empty,
+                    firstIsTemporary,
+                    secondIsTemporary,
+                    firstIsTemporary,
+                    secondIsTemporary);
+                return;
             }
+
+            // no tool is configured, which Difference reports by throwing rather than by falling back, so
+            // the built in difference window is ours to open
+            OpenVisualStudioDiff(
+                firstFileName,
+                secondFileName,
+                AppendShelvesetName(firstDisplayName, compareFiles.FirstShelveName),
+                AppendShelvesetName(secondDisplayName, compareFiles.SecondShelveName),
+                firstIsTemporary,
+                secondIsTemporary);
+        }
+
+        /// <summary>
+        /// Qualifies the label of a file with the shelveset it came from, so that the two sides of the
+        /// comparison can be told apart when the same file is shelved in both.
+        /// </summary>
+        /// <param name="displayName">The label of the file</param>
+        /// <param name="shelvesetName">The name of the shelveset the file was shelved in</param>
+        /// <returns>The qualified label</returns>
+        private static string AppendShelvesetName(string displayName, string shelvesetName)
+        {
+            return string.IsNullOrWhiteSpace(shelvesetName) ? displayName : $"{displayName};{shelvesetName}";
         }
 
         private static void GetFileToCompare(string localFilePath, IPendingChange pendingChange, out string fileToDiff, out string extension, out string displayName, out bool isTemporary)
@@ -132,13 +113,19 @@ namespace DiffFinder
             if (! File.Exists(fileToDiff))
             {
                 // if not existing locally, then use temp file for comparison and download server item
-                fileToDiff = Path.GetTempFileName();
                 isTemporary = true;
                 if (pendingChange != null)
                 {
-                    pendingChange.DownloadShelvedFile(fileToDiff);
+                    // keep the extension of the shelved file: the difference window picks the language
+                    // service from it, so a .tmp would lose the syntax highlighting
                     extension = Path.GetExtension(pendingChange.FileName);
+                    fileToDiff = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + extension);
+                    pendingChange.DownloadShelvedFile(fileToDiff);
                     displayName = $"{pendingChange.ServerItem};{pendingChange.Version}";
+                }
+                else
+                {
+                    fileToDiff = Path.GetTempFileName();
                 }
             }
             else
@@ -181,7 +168,7 @@ namespace DiffFinder
                 options |= (uint)__VSDIFFSERVICEOPTIONS.VSDIFFOPT_RightFileIsTemporary;
             }
 
-            differenceService.OpenComparisonWindow2(
+            var frame = differenceService.OpenComparisonWindow2(
                 firstFileName,
                 secondFileName,
                 caption,
@@ -191,34 +178,33 @@ namespace DiffFinder
                 null,
                 null,
                 options);
+
+            // the window is shown unless VSDIFFOPT_DoNotShow is passed, so this only brings it forward
+            frame?.Show();
         }
 
+
         /// <summary>
-        /// Returns the file path of the external tool configured for comparison for the file with given extension.
+        /// Opens the comparison, reporting a failure rather than letting it escape into the event handler.
+        /// Difference reports a missing file or a comparison tool that cannot be run by throwing, so the
+        /// message it carries is the only clue the user gets.
         /// </summary>
-        /// <param name="extension">The file extension.</param>
-        /// <param name="diffToolCommand">If a comparison tool is found this will contain the path of the tool</param>
-        /// <param name="diffToolCommandArguments">If a comparison tool is found this will contain command line arguments for the tool</param>
-        private static void GetExternalTool(string extension, out string diffToolCommand, out string diffToolCommandArguments)
+        /// <param name="compareFiles">The compare files view model</param>
+        private static void CompareFilesReportingFailure(FileComparisonViewModel compareFiles)
         {
-            diffToolCommand = string.Empty;
-            diffToolCommandArguments = string.Empty;
-
-            // read registry key for the extension
-            diffToolCommand = (string)Registry.GetValue(@"HKEY_CURRENT_USER\SOFTWARE\Microsoft\VisualStudio\" + VisualStudioVersion + @"\TeamFoundation\SourceControl\DiffTools\" + extension + @"\Compare", "Command", null);
-            diffToolCommandArguments = (string)Registry.GetValue(@"HKEY_CURRENT_USER\SOFTWARE\Microsoft\VisualStudio\" + VisualStudioVersion + @"\TeamFoundation\SourceControl\DiffTools\" + extension + @"\Compare", "Arguments", null);
-            if (diffToolCommand != null && diffToolCommandArguments != null)
+            try
             {
-                return;
+                CompareFiles(compareFiles);
             }
-
-            // read registry key for the wildcard
-            diffToolCommand = (string)Registry.GetValue(@"HKEY_CURRENT_USER\SOFTWARE\Microsoft\VisualStudio\" + VisualStudioVersion + @"\TeamFoundation\SourceControl\DiffTools\.*\Compare", "Command", null);
-            diffToolCommandArguments = (string)Registry.GetValue(@"HKEY_CURRENT_USER\SOFTWARE\Microsoft\VisualStudio\" + VisualStudioVersion + @"\TeamFoundation\SourceControl\DiffTools\.*\Compare", "Arguments", null);
+            catch (Exception ex)
+            {
+                ShelvesetComparer.Instance?.OutputPaneWriteLine(ex.ToString());
+                MessageBox.Show(ex.Message, DiffFinder.Resources.ToolWindowTitle, MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
 
         /// <summary>
-        /// Event Handler for Mouse Double click event 
+        /// Event Handler for Mouse Double click event
         /// </summary>
         /// <param name="sender">The sending object</param>
         /// <param name="e">Event Argument</param>
@@ -228,7 +214,7 @@ namespace DiffFinder
             {
                 if (this.ComparisonFiles.SelectedItem is FileComparisonViewModel compareFiles)
                 {
-                    CompareFiles(compareFiles);
+                    CompareFilesReportingFailure(compareFiles);
                 }
             }
         }
@@ -244,7 +230,7 @@ namespace DiffFinder
             {
                 if (this.ComparisonFiles.SelectedItem is FileComparisonViewModel compareFiles)
                 {
-                    CompareFiles(compareFiles);
+                    CompareFilesReportingFailure(compareFiles);
                 }
             }
         }
