@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 18
-VisualStudioVersion = 18.9.12112.369 stable
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.37628.2 d17.14
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DiffFinder", "DiffFinder\DiffFinder.csproj", "{7C432ACE-1D8C-4E09-A18F-6B8B1C96D445}"
 EndProject
@@ -21,6 +21,14 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "workflows", "workflows", "{EC18803B-3FA5-4A8B-82FE-332CBC9C8CFE}"
 	ProjectSection(SolutionItems) = preProject
 		.github\workflows\build.yml = .github\workflows\build.yml
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Assets", "Assets", "{02EA681E-C7D8-13C7-8484-4AC65E1B71E8}"
+	ProjectSection(SolutionItems) = preProject
+		Assets\Create_a_small_logoicon_for_a_Visual_Studio_extension_that_h.jpg = Assets\Create_a_small_logoicon_for_a_Visual_Studio_extension_that_h.jpg
+		Assets\prompt.txt = Assets\prompt.txt
+		Assets\regenerate_ico.cmd = Assets\regenerate_ico.cmd
+		Assets\regenerate_ico.py = Assets\regenerate_ico.py
 	EndProjectSection
 EndProject
 Global

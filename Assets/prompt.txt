@@ -1,0 +1,1 @@
+Create a small logo/icon for a Visual Studio extension that has the ability to compare shelvesets in Azure DevOps/TFS/TFVC, and files within those shelvesets.
