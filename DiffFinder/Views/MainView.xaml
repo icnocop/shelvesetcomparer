@@ -39,7 +39,7 @@
         <tfscontrols:LabeledTextBox.ToolTip>
           <TextBlock>
             Enter User account to list shelvesets
-            <Image Source="/ShelvsetComparer;component/Resources/magnifier.png" />      
+            <Image Source="../Resources/magnifier.png" />
           </TextBlock>
         </tfscontrols:LabeledTextBox.ToolTip>
       </tfscontrols:LabeledTextBox>
