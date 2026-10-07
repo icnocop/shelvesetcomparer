@@ -15,7 +15,7 @@
              TextElement.Foreground="{DynamicResource {x:Static vsui:EnvironmentColors.ToolWindowTextBrushKey}}"
              DataContext="{Binding RelativeSource={RelativeSource Self}}">
     <UserControl.Resources>
-        <ResourceDictionary Source="/DiffFinder;component/Resources/ResourceDictionary.xaml"/>
+        <ResourceDictionary Source="../Resources/ResourceDictionary.xaml"/>
     </UserControl.Resources>
 
   <Grid Margin="6,6,6,6" >

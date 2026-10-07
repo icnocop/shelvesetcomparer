@@ -110,14 +110,14 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: DiffFinder-${{ env.VERSION }} ${{ matrix.Configuration }}
-        path: DiffFinder\bin\${{ matrix.Configuration }}\DiffFinder.vsix
+        path: DiffFinder\bin\${{ matrix.Configuration }}\ShelvesetComparer.vsix
         if-no-files-found: error
 
     - name: Publish 2026 extension to Open VSIX
       if: ${{ matrix.Configuration == 'Release' && github.event.inputs.openvsix == 'true' }}
       run: |
         [Reflection.Assembly]::LoadWithPartialName("System.Web") | Out-Null
-        $vsixFile = "DiffFinder\bin\${{ matrix.Configuration }}\DiffFinder.vsix"
+        $vsixFile = "DiffFinder\bin\${{ matrix.Configuration }}\ShelvesetComparer.vsix"
         $url = "https://www.vsixgallery.com/api/upload"
         [byte[]]$bytes = [System.IO.File]::ReadAllBytes($vsixFile)
 
@@ -135,6 +135,6 @@ jobs:
       if: ${{ matrix.Configuration == 'Release' && github.event.inputs.release == 'true' }}
       uses: cezarypiatek/VsixPublisherAction@0.2
       with:
-        extension-file: DiffFinder\bin\${{ matrix.Configuration }}\DiffFinder.vsix
+        extension-file: DiffFinder\bin\${{ matrix.Configuration }}\ShelvesetComparer.vsix
         publish-manifest-file: publishManifest.json
         personal-access-code: ${{ secrets.VS_PUBLISHER_ACCESS_TOKEN }}

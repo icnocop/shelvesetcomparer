@@ -11,7 +11,7 @@
       xmlns:extensions="clr-namespace:DiffFinder"
       DataContext="{Binding Source={RelativeSource Self}}">
   <UserControl.Resources>
-    <ResourceDictionary Source="/DiffFinder;component/Resources/ResourceDictionary.xaml"/>
+    <ResourceDictionary Source="../Resources/ResourceDictionary.xaml"/>
   </UserControl.Resources>
 
   <UserControl.MaxHeight>
