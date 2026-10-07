@@ -8,17 +8,19 @@
              Name="DifFinder"
              HorizontalAlignment="Stretch"
              xmlns:tfscontrols="clr-namespace:Microsoft.TeamFoundation.Controls.WPF;assembly=Microsoft.TeamFoundation.Controls"
+             xmlns:local="clr-namespace:DiffFinder"
              xmlns:vsui="clr-namespace:Microsoft.VisualStudio.PlatformUI;assembly=Microsoft.VisualStudio.Shell.15.0"
              Background="{DynamicResource {x:Static vsui:EnvironmentColors.ToolWindowBackgroundBrushKey}}"
              Foreground="{DynamicResource {x:Static vsui:EnvironmentColors.ToolWindowTextBrushKey}}"
              TextElement.Foreground="{DynamicResource {x:Static vsui:EnvironmentColors.ToolWindowTextBrushKey}}"
              DataContext="{Binding RelativeSource={RelativeSource Self}}">
     <UserControl.Resources>
-        <ResourceDictionary Source="/DiffFinder;component/Resources/ResourceDictionary.xaml"/>
+        <ResourceDictionary Source="../Resources/ResourceDictionary.xaml"/>
     </UserControl.Resources>
 
   <Grid Margin="6,6,6,6" >
       <Grid.RowDefinitions>
+        <RowDefinition Height="Auto"/>
         <RowDefinition Height="Auto"/>
         <RowDefinition Height="Auto"/>
         <RowDefinition Height="*"/>
@@ -37,7 +39,7 @@
         <tfscontrols:LabeledTextBox.ToolTip>
           <TextBlock>
             Enter User account to list shelvesets
-            <Image Source="/ShelvsetComparer;component/Resources/magnifier.png" />      
+            <Image Source="../Resources/magnifier.png" />
           </TextBlock>
         </tfscontrols:LabeledTextBox.ToolTip>
       </tfscontrols:LabeledTextBox>
@@ -63,20 +65,34 @@
         </TextBlock>
     </Grid>
 
-    <ListView Grid.Row="2" HorizontalAlignment="Stretch" Name="ComparisonFiles" ItemsSource="{Binding ComparisonModel.Files, ElementName=DifFinder}" MouseDoubleClick="ComparisonFiles_MouseDoubleClick" KeyUp="ComparisonFiles_KeyUp" SelectionMode="Single">
+    <!-- shown while a file picked with "Compare to..." waits for the file to compare it with -->
+    <Border Grid.Row="2" Name="CompareToHint" Visibility="Collapsed" Margin="0,0,0,4" Padding="4,2" Background="LightYellow">
+      <TextBlock Name="CompareToHintText" Foreground="Black" TextWrapping="Wrap"/>
+    </Border>
+
+    <ListView Grid.Row="3" HorizontalAlignment="Stretch" Name="ComparisonFiles" ItemsSource="{Binding ComparisonModel.Files, ElementName=DifFinder}" MouseDoubleClick="ComparisonFiles_MouseDoubleClick" KeyUp="ComparisonFiles_KeyUp" PreviewMouseLeftButtonDown="ComparisonFiles_PreviewMouseLeftButtonDown" PreviewMouseLeftButtonUp="ComparisonFiles_PreviewMouseLeftButtonUp" ContextMenuOpening="ComparisonFiles_ContextMenuOpening" SelectionMode="Single">
+      <ListView.ContextMenu>
+        <ContextMenu>
+          <MenuItem Name="CompareMenuItem" Header="_Compare" Click="CompareMenuItem_Click"/>
+          <MenuItem Name="CompareToMenuItem" Header="Compare _to..." Click="CompareToMenuItem_Click"/>
+          <MenuItem Name="CancelCompareToMenuItem" Header="C_ancel Compare to" Click="CancelCompareToMenuItem_Click"/>
+        </ContextMenu>
+      </ListView.ContextMenu>
       <ListView.View>
         <GridView>
+          <!-- the tags tell which shelveset a clicked cell belongs to, and the transparent background makes
+               the whole width of the text clickable rather than only its strokes -->
           <GridViewColumn Header="First Shelveset" Width="Auto">
             <GridViewColumn.CellTemplate>
               <DataTemplate>
-                <TextBlock x:Name="FirstFileNameTxt" Text="{Binding Path=FirstFileDisplayName}" Style="{StaticResource ComparisonFileTextStyle}" />
+                <TextBlock x:Name="FirstFileNameTxt" Tag="{x:Static local:ComparisonSide.First}" Background="Transparent" Text="{Binding Path=FirstFileDisplayName}" Style="{StaticResource ComparisonFileTextStyle}" />
               </DataTemplate>
             </GridViewColumn.CellTemplate>
           </GridViewColumn>
           <GridViewColumn Header="Second Shelveset" Width="Auto">
             <GridViewColumn.CellTemplate>
               <DataTemplate>
-                <TextBlock x:Name="SecondFileNameTxt" Text="{Binding Path=SecondFileDisplayName}" Style="{StaticResource ComparisonFileTextStyle}" />
+                <TextBlock x:Name="SecondFileNameTxt" Tag="{x:Static local:ComparisonSide.Second}" Background="Transparent" Text="{Binding Path=SecondFileDisplayName}" Style="{StaticResource ComparisonFileTextStyle}" />
               </DataTemplate>
             </GridViewColumn.CellTemplate>
           </GridViewColumn>
