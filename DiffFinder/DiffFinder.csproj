@@ -24,7 +24,7 @@
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>DiffFinder</RootNamespace>
-    <AssemblyName>DiffFinder</AssemblyName>
+    <AssemblyName>ShelvesetComparer</AssemblyName>
     <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
     <GeneratePkgDefFile>true</GeneratePkgDefFile>
     <IncludeAssemblyInVSIXContainer>true</IncludeAssemblyInVSIXContainer>
@@ -76,10 +76,12 @@
     <Compile Include="TeamExplorer\ShelvesetComparerNavigationLink.cs" />
     <Compile Include="TeamExplorer\ShelvesetComparerNavigationLinkItem.cs" />
     <Compile Include="TeamExplorer\ShelvesetComparerPage.cs" />
+    <Compile Include="ViewModel\ComparisonSide.cs" />
     <Compile Include="ViewModel\IPendingChange.cs" />
     <Compile Include="ViewModel\PendingChangeFacade.cs" />
     <Compile Include="ViewModel\PendingChangeMatcher.cs" />
     <Compile Include="ViewModel\ShelvesetViewModel.cs" />
+    <Compile Include="ViewModel\ShelvesetWorkItemViewModel.cs" />
     <Compile Include="TeamExplorer\ShelvesetsContext.cs" />
     <Compile Include="TeamExplorer\UserListBuilder.cs" />
     <Compile Include="ViewExtensions\ComparisonStatusColors.cs" />
@@ -172,7 +174,7 @@
   <ItemGroup>
     <EmbeddedResource Include="Resources\grayscale.png" />
     <EmbeddedResource Include="Resources\Images.png" />
-    <EmbeddedResource Include="Resources\magnifier.png" />
+    <Resource Include="Resources\magnifier.png" />
     <Content Include="Resources\Package.ico">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
       <IncludeInVSIX>true</IncludeInVSIX>

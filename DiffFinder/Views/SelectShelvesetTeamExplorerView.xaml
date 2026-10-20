@@ -11,7 +11,7 @@
       xmlns:extensions="clr-namespace:DiffFinder"
       DataContext="{Binding Source={RelativeSource Self}}">
   <UserControl.Resources>
-    <ResourceDictionary Source="/DiffFinder;component/Resources/ResourceDictionary.xaml"/>
+    <ResourceDictionary Source="../Resources/ResourceDictionary.xaml"/>
   </UserControl.Resources>
 
   <UserControl.MaxHeight>
@@ -55,7 +55,7 @@
       <Line Stretch="Fill" Stroke="Gray" X2="1" Height="20" DockPanel.Dock="Top"/>
 
       <ListView x:Name="ListShelvesets" ItemsSource="{Binding Path=ParentSection.Shelvesets, IsAsync=True}" BorderThickness="0"
-                    SelectionMode="Multiple" ScrollViewer.HorizontalScrollBarVisibility="Hidden" 
+                    SelectionMode="Multiple" ScrollViewer.HorizontalScrollBarVisibility="Auto"
                     mvvm:FrameworkElementBehaviors.IgnoreMouseWheel="False" 
                     MouseDoubleClick="ListShelvesets_MouseDoubleClick" 
                     KeyUp="ListShelvesets_KeyUp"
@@ -69,7 +69,23 @@
               <GridViewColumnHeader Content="Shelveset Name" HorizontalAlignment="Stretch" Tag="Name"/>
               <GridViewColumn.CellTemplate>
                 <DataTemplate>
-                  <TextBlock Text="{Binding Path=Name}" />
+                  <DockPanel>
+                    <ToggleButton DockPanel.Dock="Left" IsChecked="{Binding Path=IsExpanded, Mode=TwoWay}" ToolTip="Show the associated work items">
+                      <!-- hidden rather than collapsed on shelvesets without work items, so that the
+                           names of all the shelvesets stay aligned -->
+                      <ToggleButton.Style>
+                        <Style TargetType="{x:Type ToggleButton}" BasedOn="{StaticResource ExpandToggleButtonStyle}">
+                          <Setter Property="Visibility" Value="Hidden" />
+                          <Style.Triggers>
+                            <DataTrigger Binding="{Binding Path=HasWorkItems}" Value="True">
+                              <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                          </Style.Triggers>
+                        </Style>
+                      </ToggleButton.Style>
+                    </ToggleButton>
+                    <TextBlock Text="{Binding Path=Name}" VerticalAlignment="Center" />
+                  </DockPanel>
                 </DataTemplate>
               </GridViewColumn.CellTemplate>
             </GridViewColumn>
@@ -89,8 +105,28 @@
                 </DataTemplate>
               </GridViewColumn.CellTemplate>
             </GridViewColumn>
+            <GridViewColumn extensions:GridViewSorter.PropertyName="Comment" Width="250">
+              <GridViewColumnHeader Content="Comment" HorizontalAlignment="Stretch" Tag="Comment"/>
+              <GridViewColumn.CellTemplate>
+                <DataTemplate>
+                  <TextBlock Text="{Binding Path=CommentFirstLine}" TextTrimming="CharacterEllipsis"/>
+                </DataTemplate>
+              </GridViewColumn.CellTemplate>
+            </GridViewColumn>
           </GridView>
         </ListView.View>
+        <!-- the row details: the work items associated with the shelveset, listed under it when expanded -->
+        <ListView.ItemTemplate>
+          <DataTemplate>
+            <ItemsControl ItemsSource="{Binding Path=WorkItems}" Margin="22,0,6,3" Visibility="{Binding Path=IsExpanded, Converter={StaticResource BooleanToVisibilityConverter}}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <TextBlock Text="{Binding Path=DisplayText}" ToolTip="{Binding Path=AssignedTo}" TextTrimming="CharacterEllipsis"/>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </DataTemplate>
+        </ListView.ItemTemplate>
         <ListView.ItemContainerStyle>
           <Style TargetType="{x:Type ListViewItem}" BasedOn="{StaticResource {x:Type ListViewItem}}">
             <Setter Property="ToolTip">
@@ -110,6 +146,8 @@
                   <TextBlock Grid.Row="0" Grid.Column="1" Margin="0,0,0,3" Text="{Binding Path=CreationDate, StringFormat={}{0:ddd dd MMM HH:mm}}"/>
                   <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,0,6,3" Text="Comment:" FontWeight="Bold"/>
                   <TextBlock Grid.Row="1" Grid.Column="1" Margin="0,0,0,3" Text="{Binding Path=Comment}"/>
+                  <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,0,6,3" Text="Work Items:" FontWeight="Bold" Visibility="{Binding Path=HasWorkItems, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                  <ItemsControl Grid.Row="2" Grid.Column="1" Margin="0,0,0,3" ItemsSource="{Binding Path=WorkItems}" DisplayMemberPath="DisplayText" Visibility="{Binding Path=HasWorkItems, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                 </Grid>
               </Setter.Value>
             </Setter>

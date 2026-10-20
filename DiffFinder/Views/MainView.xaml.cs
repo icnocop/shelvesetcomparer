@@ -5,11 +5,13 @@ using Microsoft.TeamFoundation.VersionControl.Client;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
 using System;
+using System.ComponentModel;
 using System.Globalization;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 
 namespace DiffFinder
 {
@@ -24,6 +26,33 @@ namespace DiffFinder
         private static readonly DependencyProperty ComparisonModelProperty = DependencyProperty.Register("ComparisonModel", typeof(ShelvesetComparerViewModel), typeof(MainView));
 
         /// <summary>
+        /// The row and side of the file picked with "Compare to...", waiting for the file to compare it
+        /// with. Null when no file is waiting.
+        /// </summary>
+        private FileComparisonViewModel compareToSource;
+
+        /// <summary>
+        /// The side of <see cref="compareToSource"/>.
+        /// </summary>
+        private ComparisonSide compareToSourceSide;
+
+        /// <summary>
+        /// The row the context menu was opened on, null when it was opened outside of a row.
+        /// </summary>
+        private FileComparisonViewModel contextMenuRow;
+
+        /// <summary>
+        /// The side of the cell the context menu was opened on.
+        /// </summary>
+        private ComparisonSide contextMenuSide;
+
+        /// <summary>
+        /// Set when a "Compare to..." comparison was opened on the first click of what may become a double
+        /// click, so that the double click does not also compare the files of the row clicked.
+        /// </summary>
+        private bool suppressDoubleClick;
+
+        /// <summary>
         /// Initializes a new instance of the MainView class.
         /// </summary>
         public MainView()
@@ -31,6 +60,11 @@ namespace DiffFinder
             this.InitializeComponent();
             this.DataContext = this;
             this.ComparisonModel = ShelvesetComparerViewModel.Instance;
+
+            // a file picked from the previous comparison is not one the user would compare to the files of
+            // the next. The view model is a singleton that outlives the view, hence the weak subscription.
+            PropertyChangedEventManager.AddHandler(this.ComparisonModel, this.OnShelvesetNameChanged, nameof(ShelvesetComparerViewModel.FirstShelvesetName));
+            PropertyChangedEventManager.AddHandler(this.ComparisonModel, this.OnShelvesetNameChanged, nameof(ShelvesetComparerViewModel.SecondShelvesetName));
         }
 
         /// <summary>
@@ -210,6 +244,12 @@ namespace DiffFinder
         /// <param name="e">Event Argument</param>
         private void ComparisonFiles_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
         {
+            if (this.suppressDoubleClick)
+            {
+                this.suppressDoubleClick = false;
+                return;
+            }
+
             if (e != null && e.ChangedButton == MouseButton.Left)
             {
                 if (this.ComparisonFiles.SelectedItem is FileComparisonViewModel compareFiles)
@@ -233,6 +273,189 @@ namespace DiffFinder
                     CompareFilesReportingFailure(compareFiles);
                 }
             }
+            else if (e != null && e.Key == Key.Escape)
+            {
+                this.CancelCompareTo();
+            }
+        }
+
+        /// <summary>
+        /// Finds the cell of the comparison grid the given element is part of.
+        /// </summary>
+        /// <param name="element">The element, typically the source of a mouse event</param>
+        /// <param name="row">The row of the cell</param>
+        /// <param name="side">The side of the cell</param>
+        /// <returns>True when the element is part of a cell, false otherwise</returns>
+        private static bool TryGetCell(DependencyObject element, out FileComparisonViewModel row, out ComparisonSide side)
+        {
+            for (var current = element; current != null; current = GetParent(current))
+            {
+                if (current is FrameworkElement cell && cell.Tag is ComparisonSide cellSide && cell.DataContext is FileComparisonViewModel cellRow)
+                {
+                    row = cellRow;
+                    side = cellSide;
+                    return true;
+                }
+
+                if (current is ListViewItem)
+                {
+                    break;
+                }
+            }
+
+            row = null;
+            side = ComparisonSide.First;
+            return false;
+        }
+
+        /// <summary>
+        /// Returns the parent of the element, walking up through text elements such as a Run, which are not
+        /// part of the visual tree.
+        /// </summary>
+        /// <param name="element">The element</param>
+        /// <returns>The parent, or null at the root</returns>
+        private static DependencyObject GetParent(DependencyObject element)
+        {
+            return element is Visual || element is System.Windows.Media.Media3D.Visual3D
+                ? VisualTreeHelper.GetParent(element)
+                : LogicalTreeHelper.GetParent(element);
+        }
+
+        /// <summary>
+        /// Enables the context menu items that apply to the cell the menu is opened on.
+        /// </summary>
+        /// <param name="sender">The sending object</param>
+        /// <param name="e">Event Argument</param>
+        private void ComparisonFiles_ContextMenuOpening(object sender, ContextMenuEventArgs e)
+        {
+            if (!TryGetCell(e?.OriginalSource as DependencyObject, out this.contextMenuRow, out this.contextMenuSide))
+            {
+                this.contextMenuRow = null;
+            }
+
+            var file = this.contextMenuRow?.GetFile(this.contextMenuSide);
+            this.CompareMenuItem.IsEnabled = this.contextMenuRow != null;
+            this.CompareToMenuItem.IsEnabled = file != null;
+            // an underscore in the file name would be taken for an access key unless doubled
+            this.CompareToMenuItem.Header = file == null ? "Compare _to..." : $"Compare '{file.FileName.Replace("_", "__")}' _to...";
+            this.CancelCompareToMenuItem.Visibility = this.compareToSource == null ? Visibility.Collapsed : Visibility.Visible;
+        }
+
+        /// <summary>
+        /// Event Handler for the compare context menu item, comparing the files of the row like a double click.
+        /// </summary>
+        /// <param name="sender">The sending object</param>
+        /// <param name="e">Event Argument</param>
+        private void CompareMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            if (this.contextMenuRow != null)
+            {
+                CompareFilesReportingFailure(this.contextMenuRow);
+            }
+        }
+
+        /// <summary>
+        /// Event Handler for the compare to context menu item. Remembers the file the menu was opened on, so
+        /// that the next file clicked is compared to it.
+        /// </summary>
+        /// <param name="sender">The sending object</param>
+        /// <param name="e">Event Argument</param>
+        private void CompareToMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            var file = this.contextMenuRow?.GetFile(this.contextMenuSide);
+            if (file == null)
+            {
+                return;
+            }
+
+            this.compareToSource = this.contextMenuRow;
+            this.compareToSourceSide = this.contextMenuSide;
+
+            var shelveName = this.compareToSource.GetShelveName(this.compareToSourceSide);
+            this.CompareToHintText.Text = string.Format(
+                CultureInfo.CurrentCulture,
+                "Click the file to compare '{0}'{1} to, or press Esc to cancel.",
+                file.FileName,
+                string.IsNullOrWhiteSpace(shelveName) ? string.Empty : $" of shelveset '{shelveName}'");
+            this.CompareToHint.Visibility = Visibility.Visible;
+            this.ComparisonFiles.Cursor = Cursors.Hand;
+        }
+
+        /// <summary>
+        /// Event Handler for the cancel compare to context menu item.
+        /// </summary>
+        /// <param name="sender">The sending object</param>
+        /// <param name="e">Event Argument</param>
+        private void CancelCompareToMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            this.CancelCompareTo();
+        }
+
+        /// <summary>
+        /// Event Handler for a click on the comparison grid. While a file picked with "Compare to..." is
+        /// waiting, compares it to the file clicked.
+        /// </summary>
+        /// <param name="sender">The sending object</param>
+        /// <param name="e">Event Argument</param>
+        private void ComparisonFiles_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            if (this.compareToSource == null || e == null)
+            {
+                return;
+            }
+
+            // a click outside of a file, such as on a column header or an empty cell, keeps waiting
+            if (!TryGetCell(e.OriginalSource as DependencyObject, out var row, out var side))
+            {
+                return;
+            }
+
+            var file = row.GetFile(side);
+            if (file == null || ReferenceEquals(file, this.compareToSource.GetFile(this.compareToSourceSide)))
+            {
+                return;
+            }
+
+            var compareFiles = FileComparisonViewModel.CreateUnaligned(this.compareToSource, this.compareToSourceSide, row, side);
+            this.CancelCompareTo();
+            this.suppressDoubleClick = true;
+            e.Handled = true;
+            CompareFilesReportingFailure(compareFiles);
+        }
+
+        /// <summary>
+        /// Event Handler for a mouse press on the comparison grid. A press that starts a new click, rather
+        /// than completing a double click, means no double click follows the "Compare to..." comparison.
+        /// </summary>
+        /// <param name="sender">The sending object</param>
+        /// <param name="e">Event Argument</param>
+        private void ComparisonFiles_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (e != null && e.ClickCount == 1)
+            {
+                this.suppressDoubleClick = false;
+            }
+        }
+
+        /// <summary>
+        /// Stops waiting for the file to compare the file picked with "Compare to..." with.
+        /// </summary>
+        private void CancelCompareTo()
+        {
+            this.compareToSource = null;
+            this.CompareToHint.Visibility = Visibility.Collapsed;
+            this.CompareToHintText.Text = string.Empty;
+            this.ComparisonFiles.ClearValue(CursorProperty);
+        }
+
+        /// <summary>
+        /// Cancels "Compare to..." when another pair of shelvesets is compared.
+        /// </summary>
+        /// <param name="sender">The comparison view model</param>
+        /// <param name="e">Event Argument</param>
+        private void OnShelvesetNameChanged(object sender, PropertyChangedEventArgs e)
+        {
+            this.CancelCompareTo();
         }
 
         /// <summary>

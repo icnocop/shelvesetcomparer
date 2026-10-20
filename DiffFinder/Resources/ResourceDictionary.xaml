@@ -5,6 +5,7 @@
 
   <extensions:UserControlMaxHeightMultiValueConverter x:Key="MaxHeightConverter"></extensions:UserControlMaxHeightMultiValueConverter>
   <extensions:EmptyStringToPlaceholderConverter x:Key="EmptyStringToPlaceholderConverter"></extensions:EmptyStringToPlaceholderConverter>
+  <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
 
   <!-- Theme Independent Colors -->
   <SolidColorBrush x:Key="ItemBrushKey" Color="{Binding Source={x:Static mtcw:TeamFoundationColors.Instance},Path=ItemColor,Mode=OneWay}" />
@@ -55,13 +56,28 @@
     <Setter Property="Control.Template">
       <Setter.Value>
         <ControlTemplate ControlTemplate.TargetType="{x:Type GridViewColumnHeader}">
-          <Border Border.Name="Bd" UIElement.SnapsToDevicePixels="True" Border.Background="{StaticResource ItemBrushKey}" TextElement.Foreground="{StaticResource ItemTextBrushKey}" Border.BorderBrush="{StaticResource ItemBorderBrushKey}" Border.BorderThickness="0,0,1,1" Border.Padding="{TemplateBinding Control.Padding}">
-            <ContentPresenter HorizontalAlignment="{TemplateBinding Control.HorizontalContentAlignment}" VerticalAlignment="Center" UIElement.SnapsToDevicePixels="{TemplateBinding UIElement.SnapsToDevicePixels}" />
-          </Border>
+          <Grid>
+            <Border Border.Name="Bd" UIElement.SnapsToDevicePixels="True" Border.Background="{StaticResource ItemBrushKey}" TextElement.Foreground="{StaticResource ItemTextBrushKey}" Border.BorderBrush="{StaticResource ItemBorderBrushKey}" Border.BorderThickness="0,0,1,1" Border.Padding="{TemplateBinding Control.Padding}">
+              <ContentPresenter HorizontalAlignment="{TemplateBinding Control.HorizontalContentAlignment}" VerticalAlignment="Center" UIElement.SnapsToDevicePixels="{TemplateBinding UIElement.SnapsToDevicePixels}" />
+            </Border>
+            <!-- the header looks for a thumb of this name to resize its column with, so leaving it out of
+                 the template is what made the columns impossible to resize -->
+            <Thumb x:Name="PART_HeaderGripper" HorizontalAlignment="Right" Width="8" Margin="0,0,-4,0" Cursor="SizeWE">
+              <Thumb.Template>
+                <ControlTemplate TargetType="{x:Type Thumb}">
+                  <Border Background="Transparent" />
+                </ControlTemplate>
+              </Thumb.Template>
+            </Thumb>
+          </Grid>
           <ControlTemplate.Triggers>
             <Trigger Trigger.Property="UIElement.IsMouseOver" Trigger.Value="True">
               <Setter TargetName="Bd" Value="{StaticResource ItemHoverBrushKey}" Property="Border.Background" />
               <Setter TargetName="Bd" Value="{StaticResource ItemHoverTextBrushKey}" Property="TextElement.Foreground" />
+            </Trigger>
+            <!-- the filler header to the right of the last column has no column to resize -->
+            <Trigger Trigger.Property="GridViewColumnHeader.Role" Trigger.Value="Padding">
+              <Setter TargetName="PART_HeaderGripper" Value="Collapsed" Property="UIElement.Visibility" />
             </Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
@@ -193,6 +209,28 @@
     </Setter>
   </Style>
 
+  <!-- Chevron expanding a row of a list to show its details -->
+  <Style x:Key="ExpandToggleButtonStyle" TargetType="{x:Type ToggleButton}">
+    <Setter Property="UIElement.Focusable" Value="False" />
+    <Setter Property="FrameworkElement.Width" Value="16" />
+    <Setter Property="FrameworkElement.Height" Value="16" />
+    <Setter Property="FrameworkElement.VerticalAlignment" Value="Center" />
+    <Setter Property="Control.Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="{x:Type ToggleButton}">
+          <Border Background="Transparent">
+            <Path x:Name="Arrow" HorizontalAlignment="Center" VerticalAlignment="Center" Data="M 0 0 L 4 4 L 0 8 Z" Fill="{Binding Path=(TextElement.Foreground), RelativeSource={RelativeSource TemplatedParent}}" />
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="ToggleButton.IsChecked" Value="True">
+              <Setter TargetName="Arrow" Property="Path.Data" Value="M 0 0 L 8 0 L 4 4 Z" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
   <!-- ListView Style. Without this the control keeps the WPF default background of SystemColors.Window,
        which is white: the themed item style only paints the rows, so an empty or partly filled list shows
        white behind them in the dark themes. Transparent lets the themed container background show through. -->
@@ -216,9 +254,19 @@
       <Setter.Value>
         <ControlTemplate ControlTemplate.TargetType="{x:Type ListViewItem}">
           <Border Border.Name="Bd" UIElement.SnapsToDevicePixels="True" Border.Background="{StaticResource ItemBrushKey}" TextElement.Foreground="{StaticResource ItemTextBrushKey}" Border.BorderBrush="{StaticResource ItemBorderBrushKey}" Border.BorderThickness="{TemplateBinding Control.BorderThickness}" Border.Padding="{TemplateBinding Control.Padding}" FrameworkElement.Margin="{TemplateBinding FrameworkElement.Margin}">
-            <GridViewRowPresenter GridViewRowPresenter.Content="{TemplateBinding ContentControl.Content}" GridViewRowPresenterBase.Columns="{TemplateBinding GridView.ColumnCollection}" UIElement.SnapsToDevicePixels="{TemplateBinding UIElement.SnapsToDevicePixels}" />
+            <StackPanel>
+              <GridViewRowPresenter GridViewRowPresenter.Content="{TemplateBinding ContentControl.Content}" GridViewRowPresenterBase.Columns="{TemplateBinding GridView.ColumnCollection}" UIElement.SnapsToDevicePixels="{TemplateBinding UIElement.SnapsToDevicePixels}" />
+              <!-- row details spanning all the columns, such as the work items of a shelveset. The columns
+                   render the cells from their own cell templates, so the item template of the list is free
+                   to describe the details; lists without one show none. -->
+              <ContentPresenter x:Name="Details" Content="{TemplateBinding ContentControl.Content}" ContentTemplate="{TemplateBinding ContentControl.ContentTemplate}" />
+            </StackPanel>
           </Border>
           <ControlTemplate.Triggers>
+            <!-- without a template the presenter would show the item as text -->
+            <Trigger Trigger.Property="ContentControl.ContentTemplate" Trigger.Value="{x:Null}">
+              <Setter TargetName="Details" Value="Collapsed" Property="UIElement.Visibility" />
+            </Trigger>
             <Trigger Trigger.Property="ListBoxItem.IsSelected" Trigger.Value="True">
               <Setter TargetName="Bd" Value="{StaticResource ItemSelectedBrushKey}" Property="Border.Background" />
               <Setter TargetName="Bd" Value="{StaticResource ItemSelectedTextBrushKey}" Property="TextElement.Foreground" />

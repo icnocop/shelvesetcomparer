@@ -59,6 +59,54 @@ namespace DiffFinder
         public FileComparisonStatus Status { get; set; }
 
         /// <summary>
+        /// Gets the file on the given side of the row.
+        /// </summary>
+        /// <param name="side">The side of the row</param>
+        /// <returns>The file, or null when the shelveset of that side has no file in this row</returns>
+        public IPendingChange GetFile(ComparisonSide side)
+        {
+            return side == ComparisonSide.First ? this.FirstFile : this.SecondFile;
+        }
+
+        /// <summary>
+        /// Gets the name of the shelveset on the given side of the row.
+        /// </summary>
+        /// <param name="side">The side of the row</param>
+        /// <returns>The name of the shelveset</returns>
+        public string GetShelveName(ComparisonSide side)
+        {
+            return side == ComparisonSide.First ? this.FirstShelveName : this.SecondShelveName;
+        }
+
+        /// <summary>
+        /// Pairs two files the grid did not align, such as a file renamed between the shelvesets without
+        /// being renamed in version control. The file of the first shelveset goes on the left like in the
+        /// grid; when both files come from the same shelveset the file picked first goes on the left.
+        /// </summary>
+        /// <param name="source">The row of the file picked first</param>
+        /// <param name="sourceSide">The side of the file picked first</param>
+        /// <param name="target">The row of the file it is compared to</param>
+        /// <param name="targetSide">The side of the file it is compared to</param>
+        /// <returns>The pair to compare</returns>
+        public static FileComparisonViewModel CreateUnaligned(FileComparisonViewModel source, ComparisonSide sourceSide, FileComparisonViewModel target, ComparisonSide targetSide)
+        {
+            var sourceIsLeft = sourceSide == targetSide || sourceSide == ComparisonSide.First;
+            var left = sourceIsLeft ? source : target;
+            var leftSide = sourceIsLeft ? sourceSide : targetSide;
+            var right = sourceIsLeft ? target : source;
+            var rightSide = sourceIsLeft ? targetSide : sourceSide;
+
+            return new FileComparisonViewModel
+            {
+                FirstFile = left.GetFile(leftSide),
+                FirstShelveName = left.GetShelveName(leftSide),
+                SecondFile = right.GetFile(rightSide),
+                SecondShelveName = right.GetShelveName(rightSide),
+                Status = FileComparisonStatus.Different
+            };
+        }
+
+        /// <summary>
         /// Returns the full file path of the pending change file.
         /// </summary>
         /// <param name="pendingChange">The pending change file</param>

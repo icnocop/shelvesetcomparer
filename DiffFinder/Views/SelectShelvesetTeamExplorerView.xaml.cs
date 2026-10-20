@@ -8,6 +8,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Threading;
 
 namespace DiffFinder
@@ -319,6 +320,16 @@ namespace DiffFinder
             if (e == null || e.ChangedButton != MouseButton.Left)
             {
                 return;
+            }
+
+            // two quick clicks on the chevron expanding the work items count as a double click on the row
+            // even though the chevron handled them, and should not navigate away from the list
+            for (var element = e.OriginalSource as DependencyObject; element != null && !(element is ListViewItem); element = element is Visual ? VisualTreeHelper.GetParent(element) : LogicalTreeHelper.GetParent(element))
+            {
+                if (element is ToggleButton)
+                {
+                    return;
+                }
             }
 
             // the list selects with Multiple mode, where a click toggles, so the selection after a double
