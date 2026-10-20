@@ -35,6 +35,11 @@ namespace DiffFinder
         private static readonly DependencyProperty SortedColumnHeaderProperty = DependencyProperty.RegisterAttached("SortedColumnHeader", typeof(GridViewColumnHeader), typeof(GridViewSorter), new UIPropertyMetadata(null));
 
         /// <summary>
+        /// DependencyProperty for the direction the last sort command sorted in.
+        /// </summary>
+        private static readonly DependencyProperty CommandSortDirectionProperty = DependencyProperty.RegisterAttached("CommandSortDirection", typeof(ListSortDirection), typeof(GridViewSorter), new UIPropertyMetadata(ListSortDirection.Ascending));
+
+        /// <summary>
         /// DependencyProperty for PropertyName.
         /// </summary>
         private static readonly DependencyProperty PropertyNameProperty = DependencyProperty.RegisterAttached("PropertyName", typeof(string), typeof(GridViewSorter), new UIPropertyMetadata(null));
@@ -260,6 +265,10 @@ namespace DiffFinder
                             if (command.CanExecute(propertyName))
                             {
                                 command.Execute(propertyName);
+
+                                // the command sorts ascending, then descending when the same column is
+                                // clicked again, which is what the glyph follows
+                                ShowCommandSortGlyph(listView, headerClicked);
                             }
                         }
                         else if (GetAutoSort(listView))
@@ -328,6 +337,33 @@ namespace DiffFinder
         }
 
         /// <summary>
+        /// Moves the sort glyph to the given column header after a sort command ran, ascending, or
+        /// descending when the column was sorted ascending already.
+        /// </summary>
+        /// <param name="listView">The list view</param>
+        /// <param name="sortedColumnHeader">The column header clicked</param>
+        private static void ShowCommandSortGlyph(ListView listView, GridViewColumnHeader sortedColumnHeader)
+        {
+            GridViewColumnHeader currentSortedColumnHeader = GetSortedColumnHeader(listView);
+            var direction = currentSortedColumnHeader == sortedColumnHeader && (ListSortDirection)listView.GetValue(CommandSortDirectionProperty) == ListSortDirection.Ascending
+                ? ListSortDirection.Descending
+                : ListSortDirection.Ascending;
+
+            if (currentSortedColumnHeader != null)
+            {
+                RemoveSortGlyph(currentSortedColumnHeader);
+            }
+
+            if (GetShowSortGlyph(listView))
+            {
+                AddSortGlyph(sortedColumnHeader, direction, direction == ListSortDirection.Ascending ? GetSortGlyphAscending(listView) : GetSortGlyphDescending(listView));
+            }
+
+            SetSortedColumnHeader(listView, sortedColumnHeader);
+            listView.SetValue(CommandSortDirectionProperty, direction);
+        }
+
+        /// <summary>
         /// Adds the sort glyph to the given column header.
         /// </summary>
         /// <param name="columnHeader">The column header where the glyph needs to be added</param>
@@ -336,7 +372,7 @@ namespace DiffFinder
         private static void AddSortGlyph(GridViewColumnHeader columnHeader, ListSortDirection direction, ImageSource sortGlyph)
         {
             AdornerLayer adornerLayer = AdornerLayer.GetAdornerLayer(columnHeader);
-            adornerLayer.Add(new SortGlyphAdorner(columnHeader, direction, sortGlyph));
+            adornerLayer?.Add(new SortGlyphAdorner(columnHeader, direction, sortGlyph));
         }
 
         /// <summary>
@@ -346,7 +382,7 @@ namespace DiffFinder
         private static void RemoveSortGlyph(GridViewColumnHeader columnHeader)
         {
             AdornerLayer adornerLayer = AdornerLayer.GetAdornerLayer(columnHeader);
-            Adorner[] adorners = adornerLayer.GetAdorners(columnHeader);
+            Adorner[] adorners = adornerLayer?.GetAdorners(columnHeader);
             if (adorners != null)
             {
                 foreach (Adorner adorner in adorners)

@@ -57,27 +57,31 @@ namespace DiffFinder
         /// <param name="e">The event arguments</param>
         public void ListShelvesetsSelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            if (this.ListShelvesets.SelectedItems.Count > 2)
-            {
-                this.ListShelvesets.SelectedItems.RemoveAt(0);
-            }
-
             if (this.restoringSelection || e == null)
             {
                 return;
             }
 
-            // record the selection on the shelvesets themselves, so that it survives the section being
-            // recreated when navigating away and back
+            // the pager holds the selection across the pages and marks it on the shelvesets themselves, so
+            // that it also survives the section being recreated when navigating away and back. A shelveset
+            // that left the list because another page is shown stays selected.
+            var pager = this.ParentSection.Pager;
             foreach (var item in e.RemovedItems.OfType<ShelvesetViewModel>())
             {
-                item.IsSelected = false;
+                if (this.ListShelvesets.Items.Contains(item))
+                {
+                    pager.Deselect(item);
+                }
             }
 
             foreach (var item in e.AddedItems.OfType<ShelvesetViewModel>())
             {
-                item.IsSelected = true;
+                pager.Select(item);
             }
+
+            // a comparison takes two shelvesets, so selecting a third deselects the one selected first,
+            // which may be on this page
+            this.RestoreSelection();
         }
 
         /// <summary>
@@ -100,7 +104,8 @@ namespace DiffFinder
         }
 
         /// <summary>
-        /// Selects the shelvesets in the list that are marked as selected.
+        /// Makes the selection of the list, which only shows a page, match the shelvesets marked as
+        /// selected.
         /// </summary>
         private void RestoreSelection()
         {
@@ -108,19 +113,12 @@ namespace DiffFinder
             {
                 this.restoringSelection = true;
 
-                var selected = this.ListShelvesets.Items
-                    .OfType<ShelvesetViewModel>()
-                    .Where(shelveset => shelveset.IsSelected)
-                    .Take(2)
-                    .ToList();
-
-                if (selected.Count == 0)
+                foreach (var shelveset in this.ListShelvesets.SelectedItems.OfType<ShelvesetViewModel>().Where(s => !s.IsSelected).ToList())
                 {
-                    return;
+                    this.ListShelvesets.SelectedItems.Remove(shelveset);
                 }
 
-                this.ListShelvesets.SelectedItems.Clear();
-                foreach (var shelveset in selected)
+                foreach (var shelveset in this.ListShelvesets.Items.OfType<ShelvesetViewModel>().Where(s => s.IsSelected && !this.ListShelvesets.SelectedItems.Contains(s)).ToList())
                 {
                     this.ListShelvesets.SelectedItems.Add(shelveset);
                 }
@@ -235,14 +233,17 @@ namespace DiffFinder
             try
             {
                 this.ClearError();
-                if (this.ListShelvesets.SelectedItems != null && this.ListShelvesets.SelectedItems.Count != 2)
+
+                // the selection of the pager, which spans the pages, rather than the one of the list
+                var selected = this.ParentSection.Pager.SelectedShelvesets;
+                if (selected.Count != 2)
                 {
                     this.ShowError(DiffFinder.Resources.ShelvesetsNotSelectedErrorMessage);
                     return;
                 }
-                
-                var firstSheleveset = this.ListShelvesets.SelectedItems[0] as ShelvesetViewModel;
-                var secondSheleveset = this.ListShelvesets.SelectedItems[1] as ShelvesetViewModel;
+
+                var firstSheleveset = selected[0];
+                var secondSheleveset = selected[1];
                 ShelvesetComparerViewModel.Instance.Initialize(firstSheleveset, secondSheleveset);
 
                 if (ShelvesetComparer.Instance != null)
@@ -275,7 +276,8 @@ namespace DiffFinder
             try
             {
                 this.ClearError();
-                if (this.ListShelvesets.SelectedItems != null && this.ListShelvesets.SelectedItems.Count != 1)
+                var selected = this.ParentSection.Pager.SelectedShelvesets;
+                if (selected.Count != 1)
                 {
                     this.ShowError(DiffFinder.Resources.ShelvesetNotSelectedErrorMessage);
                     return;
@@ -286,7 +288,7 @@ namespace DiffFinder
                 var page = parent.TeamExplorer.GetCurrentPageAsShelvesetComparerPage();
                 var pendChangeShelveset = parent.FetchPendingChangeShelveset(this.ParentSection.Context, page?.CurrentWorkspace);
                 
-                var firstSheleveset = this.ListShelvesets.SelectedItems[0] as ShelvesetViewModel;
+                var firstSheleveset = selected[0];
                 var secondSheleveset = pendChangeShelveset;
                 ShelvesetComparerViewModel.Instance.Initialize(firstSheleveset, secondSheleveset);
 

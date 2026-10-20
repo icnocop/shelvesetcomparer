@@ -27,17 +27,50 @@ namespace DiffFinder
         /// </summary>
         private bool isExpanded;
 
-        public ShelvesetViewModel(string name, DateTime creationDate, string ownerDisplayName, string ownerName = null, string comment = null, IEnumerable<ShelvesetWorkItemViewModel> workItems = null)
+        /// <summary>
+        /// The reviewers of the code reviews requested on the shelveset
+        /// </summary>
+        private IReadOnlyList<string> reviewers = new string[0];
+
+        /// <summary>
+        /// Whether the signed in user is one of the reviewers
+        /// </summary>
+        private bool isAssignedToMe;
+
+        /// <summary>
+        /// Reads the work items of the shelveset, null once they are read
+        /// </summary>
+        private Func<IEnumerable<ShelvesetWorkItemViewModel>> workItemsLoader;
+
+        /// <summary>
+        /// The work items associated with the shelveset
+        /// </summary>
+        private IReadOnlyList<ShelvesetWorkItemViewModel> workItems;
+
+        /// <summary>
+        /// Initializes a new instance of the ShelvesetViewModel class.
+        /// </summary>
+        /// <param name="name">The name of the shelveset</param>
+        /// <param name="creationDate">When the shelveset was created</param>
+        /// <param name="ownerDisplayName">The display name of the owner</param>
+        /// <param name="ownerName">The account name of the owner, the display name when not given</param>
+        /// <param name="comment">The comment the shelveset was shelved with</param>
+        /// <param name="workItems">The work items associated with the shelveset, when already known</param>
+        /// <param name="workItemsLoader">Reads the work items associated with the shelveset, called by
+        /// <see cref="LoadDetails"/> rather than up front so that only the shelvesets listed pay for it</param>
+        public ShelvesetViewModel(string name, DateTime creationDate, string ownerDisplayName, string ownerName = null, string comment = null, IEnumerable<ShelvesetWorkItemViewModel> workItems = null, Func<IEnumerable<ShelvesetWorkItemViewModel>> workItemsLoader = null)
         {
             Name = name;
             CreationDate = creationDate;
             OwnerDisplayName = ownerDisplayName;
             OwnerName = ownerName ?? ownerDisplayName;
             Comment = comment ?? string.Empty;
-            WorkItems = (workItems ?? Enumerable.Empty<ShelvesetWorkItemViewModel>()).ToList().AsReadOnly();
+            this.workItems = (workItems ?? Enumerable.Empty<ShelvesetWorkItemViewModel>()).ToList().AsReadOnly();
+            this.workItemsLoader = workItems == null ? workItemsLoader : null;
         }
+
         public ShelvesetViewModel(Shelveset shelveset)
-            : this(shelveset.Name, shelveset.CreationDate, shelveset.OwnerDisplayName, shelveset.OwnerName, shelveset.Comment, ReadWorkItems(shelveset))
+            : this(shelveset.Name, shelveset.CreationDate, shelveset.OwnerDisplayName, shelveset.OwnerName, shelveset.Comment, workItemsLoader: () => ReadWorkItems(shelveset))
         {
             Shelveset = shelveset;
         }
@@ -71,9 +104,26 @@ namespace DiffFinder
         }
 
         /// <summary>
-        /// Gets the work items associated with the shelveset.
+        /// Gets the work items associated with the shelveset. Empty until the details are loaded.
         /// </summary>
-        public IReadOnlyList<ShelvesetWorkItemViewModel> WorkItems { get; private set; }
+        public IReadOnlyList<ShelvesetWorkItemViewModel> WorkItems
+        {
+            get
+            {
+                return this.workItems;
+            }
+        }
+
+        /// <summary>
+        /// Gets a value indicating whether the details of the shelveset, its work items, are loaded.
+        /// </summary>
+        public bool AreDetailsLoaded
+        {
+            get
+            {
+                return this.workItemsLoader == null;
+            }
+        }
 
         /// <summary>
         /// Gets a value indicating whether any work item is associated with the shelveset, which is when the
@@ -84,6 +134,59 @@ namespace DiffFinder
             get
             {
                 return this.WorkItems.Count > 0;
+            }
+        }
+
+        /// <summary>
+        /// Gets or sets the reviewers of the code reviews requested on the shelveset. Empty until they are
+        /// read, and for the shelvesets no review was requested on.
+        /// </summary>
+        public IReadOnlyList<string> Reviewers
+        {
+            get
+            {
+                return this.reviewers;
+            }
+
+            set
+            {
+                this.reviewers = (value ?? Enumerable.Empty<string>()).ToList().AsReadOnly();
+                this.OnPropertyChanged(nameof(this.Reviewers));
+                this.OnPropertyChanged(nameof(this.ReviewersText));
+            }
+        }
+
+        /// <summary>
+        /// Gets the reviewers as listed in the reviewers column, such as "Ann Lee, Bob Jones".
+        /// </summary>
+        public string ReviewersText
+        {
+            get
+            {
+                return string.Join(", ", this.reviewers);
+            }
+        }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether the signed in user is one of the reviewers, which is when
+        /// the list highlights the shelveset.
+        /// </summary>
+        public bool IsAssignedToMe
+        {
+            get
+            {
+                return this.isAssignedToMe;
+            }
+
+            set
+            {
+                if (this.isAssignedToMe == value)
+                {
+                    return;
+                }
+
+                this.isAssignedToMe = value;
+                this.OnPropertyChanged(nameof(this.IsAssignedToMe));
             }
         }
 
@@ -106,7 +209,7 @@ namespace DiffFinder
                 }
 
                 this.isExpanded = value;
-                this.PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(this.IsExpanded)));
+                this.OnPropertyChanged(nameof(this.IsExpanded));
             }
         }
 
@@ -130,8 +233,48 @@ namespace DiffFinder
                 }
 
                 this.isSelected = value;
-                this.PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(this.IsSelected)));
+                this.OnPropertyChanged(nameof(this.IsSelected));
             }
+        }
+
+        /// <summary>
+        /// Loads the details of the shelveset, its work items, unless they are loaded already. A failure
+        /// only costs the work items, it does not keep the shelveset from being listed.
+        /// </summary>
+        public void LoadDetails()
+        {
+            var loader = this.workItemsLoader;
+            if (loader == null)
+            {
+                return;
+            }
+
+            IEnumerable<ShelvesetWorkItemViewModel> loaded;
+            try
+            {
+                loaded = loader();
+            }
+            catch (Exception)
+            {
+                loaded = null;
+            }
+
+            this.workItems = (loaded ?? Enumerable.Empty<ShelvesetWorkItemViewModel>()).ToList().AsReadOnly();
+            this.workItemsLoader = null;
+            this.OnPropertyChanged(nameof(this.WorkItems));
+            this.OnPropertyChanged(nameof(this.HasWorkItems));
+            this.OnPropertyChanged(nameof(this.AreDetailsLoaded));
+        }
+
+        /// <summary>
+        /// Tells whether the given user is one of the reviewers.
+        /// </summary>
+        /// <param name="user">The display name of the user</param>
+        /// <returns>True when the user is a reviewer</returns>
+        public bool IsReviewer(string user)
+        {
+            return !string.IsNullOrWhiteSpace(user)
+                && this.reviewers.Any(reviewer => string.Equals(reviewer, user.Trim(), StringComparison.CurrentCultureIgnoreCase));
         }
 
         /// <summary>
@@ -219,6 +362,15 @@ namespace DiffFinder
             }
 
             return MergeWorkItems(described, ids);
+        }
+
+        /// <summary>
+        /// Raises the PropertyChanged event for the given property.
+        /// </summary>
+        /// <param name="propertyName">The name of the property</param>
+        private void OnPropertyChanged(string propertyName)
+        {
+            this.PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
     }
 }

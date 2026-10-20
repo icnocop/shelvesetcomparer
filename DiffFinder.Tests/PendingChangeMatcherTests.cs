@@ -130,6 +130,41 @@ namespace DiffFinder.Tests
         }
 
         [TestMethod]
+        public void AreContentsSame_DeletedInBoth_ReturnsTrueWithoutDownloading()
+        {
+            var first = ChangeMock(1, "$/a/file", changeType: ChangeType.Delete);
+            var second = ChangeMock(1, "$/a/file", changeType: ChangeType.Delete);
+
+            Assert.IsTrue(PendingChangeMatcher.AreContentsSame(first.Object, second.Object));
+
+            first.Verify(c => c.DownloadShelvedFile(), Times.Never);
+            second.Verify(c => c.DownloadShelvedFile(), Times.Never);
+        }
+
+        [TestMethod]
+        public void AreContentsSame_DeletedInBothAlongWithOtherChanges_ReturnsTrue()
+        {
+            var first = Change(1, "$/a/file", changeType: ChangeType.Delete | ChangeType.Lock);
+            var second = Change(1, "$/a/file", changeType: ChangeType.Delete);
+
+            Assert.IsTrue(PendingChangeMatcher.AreContentsSame(first, second));
+        }
+
+        [TestMethod]
+        public void AreContentsSame_DeletedAlongWithOtherChangesInOne_ReturnsFalseWithoutDownloading()
+        {
+            // a delete combined with other changes is still a delete, whose shelved content is not there
+            var first = ChangeMock(1, "$/a/file", changeType: ChangeType.Delete | ChangeType.Lock);
+            var second = ChangeMock(1, "$/a/file");
+
+            Assert.IsFalse(PendingChangeMatcher.AreContentsSame(first.Object, second.Object));
+            Assert.IsFalse(PendingChangeMatcher.AreContentsSame(second.Object, first.Object));
+
+            first.Verify(c => c.DownloadShelvedFile(), Times.Never);
+            second.Verify(c => c.DownloadShelvedFile(), Times.Never);
+        }
+
+        [TestMethod]
         public void AreContentsSame_NullArguments_ReturnFalse()
         {
             var change = Change(1, "$/a/file", hash: new byte[] { 0x1 });

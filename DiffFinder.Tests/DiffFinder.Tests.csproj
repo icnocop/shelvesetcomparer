@@ -21,10 +21,22 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- the comparison grid tests render the WPF controls of the extension -->
+    <Reference Include="PresentationCore" />
+    <Reference Include="PresentationFramework" />
+    <Reference Include="System.Xaml" />
+    <Reference Include="WindowsBase" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- The extension marks these Private=false because the IDE supplies them at run time, so they do not
          flow through the project reference. The tests run outside the IDE and need them copied locally. -->
     <Reference Include="Microsoft.TeamFoundation.Common">
       <HintPath>..\ReferenceVS2026\Microsoft.TeamFoundation.Common.dll</HintPath>
+      <SpecificVersion>False</SpecificVersion>
+    </Reference>
+    <Reference Include="Microsoft.TeamFoundation.Controls">
+      <HintPath>..\ReferenceVS2026\Microsoft.TeamFoundation.Controls.dll</HintPath>
       <SpecificVersion>False</SpecificVersion>
     </Reference>
     <Reference Include="Microsoft.TeamFoundation.VersionControl.Client">

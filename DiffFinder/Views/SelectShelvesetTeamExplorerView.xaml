@@ -54,13 +54,23 @@
     <DockPanel Grid.Row="2" HorizontalAlignment="Stretch" Name="ShelvesetComparisonPanel" LastChildFill="True">
       <Line Stretch="Fill" Stroke="Gray" X2="1" Height="20" DockPanel.Dock="Top"/>
 
-      <ListView x:Name="ListShelvesets" ItemsSource="{Binding Path=ParentSection.Shelvesets, IsAsync=True}" BorderThickness="0"
+      <!-- the shelvesets are listed a page at a time, so that the details of a shelveset, such as its
+           reviewers, are only read once its page is shown. The selection is kept across the pages. -->
+      <DockPanel Name="ShelvesetPagingPanel" DockPanel.Dock="Bottom" LastChildFill="True" Margin="0,4,0,0">
+        <Button Name="PreviousPageButton" DockPanel.Dock="Left" Width="Auto" Height="Auto" Padding="6,0" Content="&lt; Previous" ToolTip="Show the previous page of shelvesets" Command="{Binding Path=ParentSection.Pager.PreviousPageCommand}"/>
+        <Button Name="NextPageButton" DockPanel.Dock="Left" Width="Auto" Height="Auto" Padding="6,0" Margin="4,0,0,0" Content="Next &gt;" ToolTip="Show the next page of shelvesets" Command="{Binding Path=ParentSection.Pager.NextPageCommand}"/>
+        <TextBlock Name="PageText" DockPanel.Dock="Left" Margin="8,0,0,0" VerticalAlignment="Center" Text="{Binding Path=ParentSection.Pager.PageText}"/>
+        <TextBlock Name="SelectionText" Margin="12,0,0,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Text="{Binding Path=ParentSection.Pager.SelectionText}" ToolTip="{Binding Path=ParentSection.Pager.SelectionText}"/>
+      </DockPanel>
+
+      <!-- sorting goes through the pager, so that it sorts the shelvesets of all the pages -->
+      <ListView x:Name="ListShelvesets" ItemsSource="{Binding Path=ParentSection.Pager.CurrentPage}" BorderThickness="0"
                     SelectionMode="Multiple" ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                    mvvm:FrameworkElementBehaviors.IgnoreMouseWheel="False" 
-                    MouseDoubleClick="ListShelvesets_MouseDoubleClick" 
+                    mvvm:FrameworkElementBehaviors.IgnoreMouseWheel="False"
+                    MouseDoubleClick="ListShelvesets_MouseDoubleClick"
                     KeyUp="ListShelvesets_KeyUp"
                     SelectionChanged="ListShelvesetsSelectionChanged"
-                    extensions:GridViewSorter.AutoSort="True"
+                    extensions:GridViewSorter.Command="{Binding Path=ParentSection.Pager.SortCommand}"
                     extensions:GridViewSorter.ShowSortGlyph="True"
                     DockPanel.Dock="Top">
         <ListView.View>
@@ -105,6 +115,14 @@
                 </DataTemplate>
               </GridViewColumn.CellTemplate>
             </GridViewColumn>
+            <GridViewColumn extensions:GridViewSorter.PropertyName="ReviewersText" Width="160">
+              <GridViewColumnHeader Content="Reviewers" HorizontalAlignment="Stretch" Tag="Reviewers"/>
+              <GridViewColumn.CellTemplate>
+                <DataTemplate>
+                  <TextBlock Text="{Binding Path=ReviewersText}" TextTrimming="CharacterEllipsis"/>
+                </DataTemplate>
+              </GridViewColumn.CellTemplate>
+            </GridViewColumn>
             <GridViewColumn extensions:GridViewSorter.PropertyName="Comment" Width="250">
               <GridViewColumnHeader Content="Comment" HorizontalAlignment="Stretch" Tag="Comment"/>
               <GridViewColumn.CellTemplate>
@@ -129,6 +147,12 @@
         </ListView.ItemTemplate>
         <ListView.ItemContainerStyle>
           <Style TargetType="{x:Type ListViewItem}" BasedOn="{StaticResource {x:Type ListViewItem}}">
+            <Style.Triggers>
+              <!-- the code reviews the signed in user is a reviewer of stand out -->
+              <DataTrigger Binding="{Binding Path=IsAssignedToMe}" Value="True">
+                <Setter Property="FontWeight" Value="Bold" />
+              </DataTrigger>
+            </Style.Triggers>
             <Setter Property="ToolTip">
               <Setter.Value>
                 <Grid>
@@ -148,6 +172,8 @@
                   <TextBlock Grid.Row="1" Grid.Column="1" Margin="0,0,0,3" Text="{Binding Path=Comment}"/>
                   <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,0,6,3" Text="Work Items:" FontWeight="Bold" Visibility="{Binding Path=HasWorkItems, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                   <ItemsControl Grid.Row="2" Grid.Column="1" Margin="0,0,0,3" ItemsSource="{Binding Path=WorkItems}" DisplayMemberPath="DisplayText" Visibility="{Binding Path=HasWorkItems, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                  <TextBlock Grid.Row="3" Grid.Column="0" Margin="0,0,6,3" Text="Reviewers:" FontWeight="Bold"/>
+                  <TextBlock Grid.Row="3" Grid.Column="1" Margin="0,0,0,3" Text="{Binding Path=ReviewersText}"/>
                 </Grid>
               </Setter.Value>
             </Setter>
