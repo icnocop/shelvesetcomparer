@@ -1,21 +1,16 @@
 name: Build
 
+# Builds and tests every push and pull request. A push to dev also publishes the Release VSIX as a
+# GitHub pre-release, which the Publish workflow then publishes to the marketplaces without rebuilding.
 on:
   push:
     branches: [ dev ]
   pull_request:
     branches: [ dev ]
   workflow_dispatch:
-    branches: [ dev ]
-    inputs:
-      release:
-        description: 'Publish 2026 extension to Visual Studio Marketplace?'
-        required: true
-        default: 'false'
-      openvsix:
-        description: 'Publish 2026 extension to Open VSIX Gallery?'
-        required: true
-        default: 'false'
+
+permissions:
+  contents: read
 
 jobs:
 
@@ -109,32 +104,33 @@ jobs:
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: DiffFinder-${{ env.VERSION }} ${{ matrix.Configuration }}
+        name: ShelvesetComparer-${{ env.VERSION }}-${{ matrix.Configuration }}
         path: DiffFinder\bin\${{ matrix.Configuration }}\ShelvesetComparer.vsix
         if-no-files-found: error
 
-    - name: Publish 2026 extension to Open VSIX
-      if: ${{ matrix.Configuration == 'Release' && github.event.inputs.openvsix == 'true' }}
-      run: |
-        [Reflection.Assembly]::LoadWithPartialName("System.Web") | Out-Null
-        $vsixFile = "DiffFinder\bin\${{ matrix.Configuration }}\ShelvesetComparer.vsix"
-        $url = "https://www.vsixgallery.com/api/upload"
-        [byte[]]$bytes = [System.IO.File]::ReadAllBytes($vsixFile)
+  prerelease:
+    name: Publish the GitHub pre-release
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: ShelvesetComparer-*-Release
+          path: artifacts
 
-        try {
-            $webclient = New-Object System.Net.WebClient
-            $webclient.UploadFile($url, $vsixFile) | Out-Null
-            'OK' | Write-Host -ForegroundColor Green
-        }
-        catch{
-            'FAIL' | Write-Error
-            $_.Exception.Response.Headers["x-error"] | Write-Error
-        }
+      # The version is in the name of the artifact, the one the Release build stamped into the VSIX
+      - name: Publish the pre-release
+        shell: bash
+        run: |
+          artifact=$(ls -d artifacts/ShelvesetComparer-*-Release | head -n 1)
+          version=$(basename "$artifact" | sed -E 's/^ShelvesetComparer-(.*)-Release$/\1/')
+          tag="v$version"
 
-    - name: Publish DiffFinder extension to Marketplace
-      if: ${{ matrix.Configuration == 'Release' && github.event.inputs.release == 'true' }}
-      uses: cezarypiatek/VsixPublisherAction@0.2
-      with:
-        extension-file: DiffFinder\bin\${{ matrix.Configuration }}\ShelvesetComparer.vsix
-        publish-manifest-file: publishManifest.json
-        personal-access-code: ${{ secrets.VS_PUBLISHER_ACCESS_TOKEN }}
+          gh release create "$tag" "$artifact/ShelvesetComparer.vsix" --prerelease --latest=false --title "$tag" --generate-notes --target "$GITHUB_SHA"
+          echo "Published the GitHub pre-release $tag. Run the Publish workflow to publish it to the Visual Studio Marketplace and the Open VSIX Gallery." >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,112 @@
+name: Publish
+
+# Run by hand from the Actions tab. Publishes the VSIX of a GitHub pre-release, as built by the Build
+# workflow, to the Visual Studio Marketplace and the Open VSIX Gallery, and turns the pre-release into
+# the latest release. The VSIX is published as it was built and tested, without rebuilding it.
+on:
+  workflow_dispatch:
+    inputs:
+      pre-release:
+        description: GitHub pre-release tag, such as v1.6.1020.42 (leave empty for the newest)
+        type: string
+        required: false
+      marketplace:
+        description: Publish to the Visual Studio Marketplace
+        type: boolean
+        default: true
+      openvsix:
+        description: Publish to the Open VSIX Gallery
+        type: boolean
+        default: true
+      github-release:
+        description: Turn the GitHub pre-release into the latest release
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Publish ${{ inputs.pre-release || 'the newest pre-release' }}
+    # the Marketplace publisher is a Windows tool
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Find the pre-release
+        id: source
+        shell: bash
+        run: |
+          tag="${{ inputs.pre-release }}"
+          if [ -z "$tag" ]; then
+            tag=$(gh release list --limit 100 --json tagName,isPrerelease,createdAt \
+              --jq '[.[] | select(.isPrerelease)] | sort_by(.createdAt) | last | .tagName // empty')
+          fi
+          if [ -z "$tag" ]; then
+            echo "::error::There is no GitHub pre-release to publish."
+            exit 1
+          fi
+
+          if [ "$(gh release view "$tag" --json isPrerelease --jq .isPrerelease)" != "true" ]; then
+            echo "::error::$tag is not a pre-release."
+            exit 1
+          fi
+
+          commit=$(gh release view "$tag" --json targetCommitish --jq .targetCommitish)
+
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+
+      # the Marketplace publisher reads the publish manifest and the README it points to from the commit
+      # the VSIX was built from
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.source.outputs.commit }}
+
+      - name: Download the VSIX
+        shell: bash
+        run: gh release download "${{ steps.source.outputs.tag }}" --pattern "*.vsix" --dir artifacts
+
+      - name: Publish to the Open VSIX Gallery
+        if: inputs.openvsix
+        shell: pwsh
+        run: |
+          $vsixFile = "artifacts\ShelvesetComparer.vsix"
+          $url = "https://www.vsixgallery.com/api/upload"
+
+          try {
+              $webclient = New-Object System.Net.WebClient
+              $webclient.UploadFile($url, $vsixFile) | Out-Null
+              'OK' | Write-Host -ForegroundColor Green
+          }
+          catch {
+              $_.Exception.Response.Headers["x-error"] | Write-Host
+              throw
+          }
+
+      - name: Publish to the Visual Studio Marketplace
+        if: inputs.marketplace
+        uses: cezarypiatek/VsixPublisherAction@0.2
+        with:
+          extension-file: artifacts\ShelvesetComparer.vsix
+          publish-manifest-file: publishManifest.json
+          personal-access-code: ${{ secrets.VS_PUBLISHER_ACCESS_TOKEN }}
+
+      - name: Publish the GitHub release
+        if: inputs.github-release
+        shell: bash
+        run: gh release edit "${{ steps.source.outputs.tag }}" --prerelease=false --latest
+
+      - name: Summary
+        shell: bash
+        run: |
+          {
+            echo "Published ${{ steps.source.outputs.tag }}:"
+            if [ "${{ inputs.marketplace }}" = "true" ]; then echo "- to the Visual Studio Marketplace"; fi
+            if [ "${{ inputs.openvsix }}" = "true" ]; then echo "- to the Open VSIX Gallery"; fi
+            if [ "${{ inputs.github-release }}" = "true" ]; then echo "- as the latest GitHub release"; fi
+          } >> "$GITHUB_STEP_SUMMARY"
