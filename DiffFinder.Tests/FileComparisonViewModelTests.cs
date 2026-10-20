@@ -1,3 +1,4 @@
+using Microsoft.TeamFoundation.VersionControl.Client;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Moq;
 
@@ -53,6 +54,52 @@ namespace DiffFinder.Tests
             Assert.AreSame(this.oldName, pair.SecondFile);
             Assert.AreEqual("review 2", pair.FirstShelveName);
             Assert.AreEqual("review 2", pair.SecondShelveName);
+        }
+
+        [TestMethod]
+        public void FileToolTip_ServerFile_ShowsTheFullPathAndTheChange()
+        {
+            var row = new FileComparisonViewModel
+            {
+                FirstFile = File("$/Project/Main/src", "Program.cs", "$/Project/Main/src/Program.cs", ChangeType.Edit),
+                SecondFile = File("$/Project/Dev/src/very/deep/folder", "Program.cs", "$/Project/Dev/src/very/deep/folder/Program.cs", ChangeType.Delete)
+            };
+
+            Assert.AreEqual("$/Project/Main/src/Program.cs\r\nChange: edit", row.FirstFileToolTip);
+            Assert.AreEqual("$/Project/Dev/src/very/deep/folder/Program.cs\r\nChange: delete", row.SecondFileToolTip);
+        }
+
+        [TestMethod]
+        public void FileToolTip_LocalFile_AlsoShowsTheServerPath()
+        {
+            var row = new FileComparisonViewModel
+            {
+                FirstFile = File(@"C:\Source\Main\src", "Program.cs", "$/Project/Main/src/Program.cs", ChangeType.Edit | ChangeType.Encoding)
+            };
+
+            Assert.AreEqual(@"C:\Source\Main\src/Program.cs" + "\r\n$/Project/Main/src/Program.cs\r\nChange: edit, encoding", row.FirstFileToolTip);
+        }
+
+        [TestMethod]
+        public void FileToolTip_NoFileOnThatSide_IsNull()
+        {
+            var row = new FileComparisonViewModel
+            {
+                FirstFile = File("$/Project/Main/src", "Program.cs", "$/Project/Main/src/Program.cs", ChangeType.Add)
+            };
+
+            // null rather than empty, so that no empty tooltip pops up over the missing file
+            Assert.IsNull(row.SecondFileToolTip);
+        }
+
+        private static IPendingChange File(string folder, string fileName, string serverItem, ChangeType changeType)
+        {
+            var file = new Mock<IPendingChange>();
+            file.SetupGet(f => f.LocalOrServerFolder).Returns(folder);
+            file.SetupGet(f => f.FileName).Returns(fileName);
+            file.SetupGet(f => f.ServerItem).Returns(serverItem);
+            file.SetupGet(f => f.ChangeType).Returns(changeType);
+            return file.Object;
         }
     }
 }

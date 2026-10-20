@@ -1,7 +1,9 @@
 ﻿// <copyright file="FileComparisonViewModel.cs" company="https://github.com/rajeevboobna/CompareShelvesets">Copyright https://github.com/rajeevboobna/CompareShelvesets. All Rights Reserved. This code released under the terms of the Microsoft Public License (MS-PL, http://opensource.org/licenses/ms-pl.html.) This is sample code only, do not use in production environments.</copyright>
 
 using Microsoft.TeamFoundation.VersionControl.Client;
+using System;
 using System.Globalization;
+using System.Text;
 
 namespace DiffFinder
 {
@@ -49,6 +51,30 @@ namespace DiffFinder
             get
             {
                 return GetFullFilePath(this.SecondFile);
+            }
+        }
+
+        /// <summary>
+        /// Gets the tooltip of the first file, which shows the full path the column may be too narrow for.
+        /// Null when the first shelveset has no file in this row.
+        /// </summary>
+        public string FirstFileToolTip
+        {
+            get
+            {
+                return GetToolTip(this.FirstFile);
+            }
+        }
+
+        /// <summary>
+        /// Gets the tooltip of the second file, which shows the full path the column may be too narrow for.
+        /// Null when the second shelveset has no file in this row.
+        /// </summary>
+        public string SecondFileToolTip
+        {
+            get
+            {
+                return GetToolTip(this.SecondFile);
             }
         }
 
@@ -114,6 +140,29 @@ namespace DiffFinder
         private static string GetFullFilePath(IPendingChange pendingChange)
         {
             return (pendingChange != null) ? string.Format(CultureInfo.CurrentCulture, @"{0}/{1}", pendingChange.LocalOrServerFolder, pendingChange.FileName) : string.Empty;
+        }
+
+        /// <summary>
+        /// Returns the tooltip of the pending change file: its full path, the server path as well when the
+        /// file is listed by its local path, and the change shelved.
+        /// </summary>
+        /// <param name="pendingChange">The pending change file</param>
+        /// <returns>The tooltip, or null when there is no file</returns>
+        private static string GetToolTip(IPendingChange pendingChange)
+        {
+            if (pendingChange == null)
+            {
+                return null;
+            }
+
+            var toolTip = new StringBuilder(GetFullFilePath(pendingChange));
+            if (!string.IsNullOrEmpty(pendingChange.ServerItem) && !string.Equals(pendingChange.ServerItem, toolTip.ToString(), StringComparison.OrdinalIgnoreCase))
+            {
+                toolTip.Append("\r\n").Append(pendingChange.ServerItem);
+            }
+
+            toolTip.Append("\r\nChange: ").Append(pendingChange.ChangeType.ToString().ToLowerInvariant());
+            return toolTip.ToString();
         }
     }
 }

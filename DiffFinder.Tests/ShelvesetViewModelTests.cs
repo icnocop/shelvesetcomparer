@@ -80,6 +80,109 @@ namespace DiffFinder.Tests
         }
 
         [TestMethod]
+        public void WorkItems_NotReadUntilTheDetailsAreLoaded()
+        {
+            var read = 0;
+            var shelveset = new ShelvesetViewModel("review", DateTime.Now, "John Smith", workItemsLoader: () =>
+            {
+                read++;
+                return new[] { new ShelvesetWorkItemViewModel(12) };
+            });
+
+            Assert.IsFalse(shelveset.AreDetailsLoaded);
+            Assert.AreEqual(0, shelveset.WorkItems.Count);
+            Assert.IsFalse(shelveset.HasWorkItems);
+            Assert.AreEqual(0, read);
+
+            shelveset.LoadDetails();
+            shelveset.LoadDetails();
+
+            Assert.IsTrue(shelveset.AreDetailsLoaded);
+            Assert.AreEqual(1, read);
+            Assert.AreEqual(12, shelveset.WorkItems.Single().Id);
+            Assert.IsTrue(shelveset.HasWorkItems);
+        }
+
+        [TestMethod]
+        public void LoadDetails_NotifiesTheWorkItems()
+        {
+            var shelveset = new ShelvesetViewModel("review", DateTime.Now, "John Smith", workItemsLoader: () => new[] { new ShelvesetWorkItemViewModel(12) });
+            var changed = new System.Collections.Generic.List<string>();
+            shelveset.PropertyChanged += (sender, e) => changed.Add(e.PropertyName);
+
+            shelveset.LoadDetails();
+
+            CollectionAssert.Contains(changed, nameof(ShelvesetViewModel.WorkItems));
+            CollectionAssert.Contains(changed, nameof(ShelvesetViewModel.HasWorkItems));
+        }
+
+        [TestMethod]
+        public void LoadDetails_LoaderFails_LeavesNoWorkItems()
+        {
+            var shelveset = new ShelvesetViewModel("review", DateTime.Now, "John Smith", workItemsLoader: () => throw new InvalidOperationException("server unreachable"));
+
+            shelveset.LoadDetails();
+
+            Assert.IsTrue(shelveset.AreDetailsLoaded);
+            Assert.AreEqual(0, shelveset.WorkItems.Count);
+        }
+
+        [TestMethod]
+        public void WorkItemsGiven_AreLoadedFromTheStart()
+        {
+            var shelveset = new ShelvesetViewModel("review", DateTime.Now, "John Smith", workItems: new[] { new ShelvesetWorkItemViewModel(12) });
+
+            Assert.IsTrue(shelveset.AreDetailsLoaded);
+            Assert.IsTrue(shelveset.HasWorkItems);
+        }
+
+        [TestMethod]
+        public void Reviewers_NoneByDefault()
+        {
+            var shelveset = new ShelvesetViewModel("review", DateTime.Now, "John Smith");
+
+            Assert.AreEqual(0, shelveset.Reviewers.Count);
+            Assert.AreEqual(string.Empty, shelveset.ReviewersText);
+            Assert.IsFalse(shelveset.IsAssignedToMe);
+        }
+
+        [TestMethod]
+        public void Reviewers_Set_AreListedAndNotified()
+        {
+            var shelveset = new ShelvesetViewModel("review", DateTime.Now, "John Smith");
+            var changed = new System.Collections.Generic.List<string>();
+            shelveset.PropertyChanged += (sender, e) => changed.Add(e.PropertyName);
+
+            shelveset.Reviewers = new[] { "Ann Lee", "Bob Jones" };
+
+            Assert.AreEqual("Ann Lee, Bob Jones", shelveset.ReviewersText);
+            CollectionAssert.Contains(changed, nameof(ShelvesetViewModel.Reviewers));
+            CollectionAssert.Contains(changed, nameof(ShelvesetViewModel.ReviewersText));
+        }
+
+        [TestMethod]
+        public void IsReviewer_IgnoresCasing()
+        {
+            var shelveset = new ShelvesetViewModel("review", DateTime.Now, "John Smith") { Reviewers = new[] { "Ann Lee" } };
+
+            Assert.IsTrue(shelveset.IsReviewer("ann lee"));
+            Assert.IsFalse(shelveset.IsReviewer("Bob Jones"));
+            Assert.IsFalse(shelveset.IsReviewer(null));
+        }
+
+        [TestMethod]
+        public void IsAssignedToMe_Changed_RaisesPropertyChanged()
+        {
+            var shelveset = new ShelvesetViewModel("review", DateTime.Now, "John Smith");
+            string changed = null;
+            shelveset.PropertyChanged += (sender, e) => changed = e.PropertyName;
+
+            shelveset.IsAssignedToMe = true;
+
+            Assert.AreEqual(nameof(ShelvesetViewModel.IsAssignedToMe), changed);
+        }
+
+        [TestMethod]
         public void MergeWorkItems_DuplicateIds_ListsEachWorkItemOnce()
         {
             var described = new[] { new ShelvesetWorkItemViewModel(12, "Fix the login"), new ShelvesetWorkItemViewModel(12, "Fix the login"), null };

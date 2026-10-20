@@ -71,6 +71,11 @@ namespace DiffFinder
         private string filter;
 
         /// <summary>
+        /// The order the files are listed in
+        /// </summary>
+        private FileOrder fileOrder;
+
+        /// <summary>
         /// Initializes a new instance of the ShelvesetComparerViewModel class
         /// </summary>
         /// <param name="serviceProvider">The service provider</param>
@@ -154,6 +159,30 @@ namespace DiffFinder
             }
         }
         
+        /// <summary>
+        /// Gets or sets the order the files are listed in. Kept for as long as Visual Studio runs, so that
+        /// the next comparison lists its files the same way.
+        /// </summary>
+        public FileOrder FileOrder
+        {
+            get
+            {
+                return this.fileOrder;
+            }
+
+            set
+            {
+                if (this.fileOrder == value)
+                {
+                    return;
+                }
+
+                this.fileOrder = value;
+                this.NotifyPropertyChanged(nameof(this.FileOrder));
+                this.NotifyPropertyChanged(nameof(this.Files));
+            }
+        }
+
         /// <summary>
         /// Gets or sets the total number of files
         /// </summary>
@@ -242,19 +271,35 @@ namespace DiffFinder
         /// <summary>
         /// Gets Files view model of all matching and different files.
         /// </summary>
-        public IEnumerable<FileComparisonViewModel> Files 
+        public IEnumerable<FileComparisonViewModel> Files
         {
             get
             {
+                var ordered = FileComparisonBuilder.Order(this.files, this.fileOrder);
                 if (string.IsNullOrWhiteSpace(this.filter))
                 {
-                    return this.files;
+                    return ordered.ToList();
                 }
                 else
                 {
-                    return this.files.Where(s => HasMatchingFileName(s, this.filter));
+                    return ordered.Where(s => HasMatchingFileName(s, this.filter)).ToList();
                 }
             }
+        }
+
+        /// <summary>
+        /// Replaces the files listed.
+        /// </summary>
+        /// <param name="comparedFiles">The files, in the order they were shelved in</param>
+        public void SetFiles(IEnumerable<FileComparisonViewModel> comparedFiles)
+        {
+            this.files.Clear();
+            foreach (var item in comparedFiles ?? Enumerable.Empty<FileComparisonViewModel>())
+            {
+                this.files.Add(item);
+            }
+
+            this.NotifyPropertyChanged(nameof(this.Files));
         }
 
         //public void Initialize(ShelvesetViewModel firstShelveset, ShelvesetViewModel secondShelveset)
@@ -296,7 +341,7 @@ namespace DiffFinder
             this.FirstShelvesetName = firstShelveset.Name;
             this.SecondShelvesetName = secondShelveset.Name;
 
-            this.files.Clear();
+            this.SetFiles(null);
             var firstShelvesetChanges = GetPendingChanges(firstShelveset, vcs);
             if (firstShelvesetChanges == null)
             {
@@ -310,58 +355,8 @@ namespace DiffFinder
                 return;
             }
 
-            var orderedCollection = new SortedList<string, FileComparisonViewModel>();
-            int sameContentFileCount = 0;
-            int commonFilesCount = 0;
-            foreach (var pendingChange in firstShelvesetChanges)
-            {
-                var matchingFile = PendingChangeMatcher.FindMatch(pendingChange, secondShelvesetChanges);
-
-                bool sameContent = matchingFile != null && PendingChangeMatcher.AreContentsSame(pendingChange, matchingFile);
-                FileComparisonViewModel comparisonItem = new FileComparisonViewModel()
-                {
-                    FirstFile  = pendingChange,
-                    SecondFile = matchingFile,
-                    FirstShelveName = firstShelvesetName,
-                    SecondShelveName = SecondShelvesetName,
-                    Status = sameContent ? FileComparisonStatus.Matching : (matchingFile != null) ? FileComparisonStatus.Different : FileComparisonStatus.NoMatch
-                };
-
-                orderedCollection.Add(pendingChange.LocalOrServerFolder + "/" + pendingChange.FileName, comparisonItem);
-                if (sameContent)
-                {
-                    ++sameContentFileCount;
-                }
-
-                if (matchingFile != null) 
-                {
-                    ++commonFilesCount;
-                }
-            }
-
-            foreach (var pendingChange in secondShelvesetChanges)
-            {
-                if (! orderedCollection.ContainsKey(pendingChange.LocalOrServerFolder + "/" + pendingChange.FileName))
-                {
-                    var isThereAreNamedFile = FindItemWithSameItemId(orderedCollection, pendingChange.ItemId);
-                    if (isThereAreNamedFile == null)
-                    {
-                        FileComparisonViewModel comparisonItem = new FileComparisonViewModel()
-                        {
-                            SecondFile = pendingChange,
-                            SecondShelveName = SecondShelvesetName,
-                            Status = FileComparisonStatus.NoMatch
-                        };
-
-                        orderedCollection.Add(pendingChange.LocalOrServerFolder + "/" + pendingChange.FileName, comparisonItem);
-                    }
-                }
-            }
-
-            foreach (var item in orderedCollection.Keys)
-            {
-                this.files.Add(orderedCollection[item]);
-            }
+            var comparison = FileComparisonBuilder.Build(firstShelvesetChanges, secondShelvesetChanges, this.FirstShelvesetName, this.SecondShelvesetName);
+            this.SetFiles(comparison.Files);
 
             if (firstShelveset.Name == secondShelveset.Name && firstShelveset.OwnerName == secondShelveset.OwnerName)
             {
@@ -372,10 +367,10 @@ namespace DiffFinder
             }
             else
             {
-                this.SummaryText = string.Format(CultureInfo.CurrentCulture, Resources.SummaryMessage, commonFilesCount, sameContentFileCount, orderedCollection.Count - sameContentFileCount);
-                this.TotalNumberOfFiles = commonFilesCount;
-                this.NumberOfMatchingFiles = sameContentFileCount;
-                this.NumberOfDifferentFiles = orderedCollection.Count - sameContentFileCount;
+                this.SummaryText = string.Format(CultureInfo.CurrentCulture, Resources.SummaryMessage, comparison.CommonFileCount, comparison.MatchingFileCount, comparison.DifferentFileCount);
+                this.TotalNumberOfFiles = comparison.CommonFileCount;
+                this.NumberOfMatchingFiles = comparison.MatchingFileCount;
+                this.NumberOfDifferentFiles = comparison.DifferentFileCount;
             }
         }
 
@@ -392,27 +387,6 @@ namespace DiffFinder
                 ?.Select(pc => new PendingChangeFacade(pc))
                 ?.ToArray<IPendingChange>();
         }
-
-        /// <summary>
-        /// The method find a pending change item in the collection with the given item id.
-        /// </summary>
-        /// <param name="orderedCollection">The collection to find the pending change file in.</param>
-        /// <param name="itemId">The item id</param>
-        /// <returns>The pending change file if found. Null otherwise.</returns>
-        private static FileComparisonViewModel FindItemWithSameItemId(SortedList<string, FileComparisonViewModel> orderedCollection, int itemId)
-        {
-            foreach (string key in orderedCollection.Keys)
-            {
-                var item = orderedCollection[key];
-                if ((item.FirstFile?.ItemId == itemId) || (item.SecondFile?.ItemId == itemId))
-                {
-                    return item;
-                }
-            }
-            
-            return null;
-        }
-
 
         /// <summary>
         /// Returns true or false depending upon whether the first or second file name starts with the given filter.

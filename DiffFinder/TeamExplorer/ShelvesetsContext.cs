@@ -1,6 +1,7 @@
 // <copyright file="ShelvesetsContext.cs" company="https://github.com/rajeevboobna/CompareShelvesets">Copyright https://github.com/rajeevboobna/CompareShelvesets. All Rights Reserved. This code released under the terms of the Microsoft Public License (MS-PL, http://opensource.org/licenses/ms-pl.html.) This is sample code only, do not use in production environments.</copyright>
 
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 
 namespace DiffFinder
 {
@@ -42,5 +43,20 @@ namespace DiffFinder
         /// Gets or sets the user account name selected for the second shelveset.
         /// </summary>
         public string SecondUserAccountName { get; set; }
+
+        /// <summary>
+        /// Gets or sets the index of the page of shelvesets shown.
+        /// </summary>
+        public int PageIndex { get; set; }
+
+        /// <summary>
+        /// Gets or sets the name of the property the shelvesets are sorted by, null when unsorted.
+        /// </summary>
+        public string SortPropertyName { get; set; }
+
+        /// <summary>
+        /// Gets or sets the direction the shelvesets are sorted in.
+        /// </summary>
+        public ListSortDirection SortDirection { get; set; }
     }
 }

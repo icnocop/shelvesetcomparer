@@ -44,30 +44,39 @@ namespace DiffFinder
 
         /// <summary>
         /// Compares the contents of the two given pending changes, by upload hash when one is available and
-        /// by downloading and comparing the shelved files otherwise.
+        /// by downloading and comparing the shelved files otherwise. A file deleted in both shelvesets is the
+        /// same in both, while a file deleted in only one of them differs; a deleted file has no shelved
+        /// content to compare either way.
         /// </summary>
         /// <param name="firstPendingChange">The first pending change</param>
         /// <param name="secondPendingChange">The second pending change</param>
         /// <returns>True if the file contents are the same. False otherwise.</returns>
         public static bool AreContentsSame(IPendingChange firstPendingChange, IPendingChange secondPendingChange)
         {
-            if (firstPendingChange != null && secondPendingChange != null
-                && firstPendingChange.ChangeType != ChangeType.Delete && secondPendingChange.ChangeType != ChangeType.Delete)
+            if (firstPendingChange == null || secondPendingChange == null)
             {
-                if (firstPendingChange.UploadHashValue != null)
-                {
-                    return secondPendingChange.UploadHashValue != null
-                        && firstPendingChange.UploadHashValue.SequenceEqual(secondPendingChange.UploadHashValue);
-                }
-
-                using (var firstFileStream = firstPendingChange.DownloadShelvedFile())
-                using (var secondFileStream = secondPendingChange.DownloadShelvedFile())
-                {
-                    return StreamCompare(firstFileStream, secondFileStream);
-                }
+                return false;
             }
 
-            return false;
+            // the change type is a set of flags, a delete may come along with a lock for instance
+            var firstIsDelete = (firstPendingChange.ChangeType & ChangeType.Delete) == ChangeType.Delete;
+            var secondIsDelete = (secondPendingChange.ChangeType & ChangeType.Delete) == ChangeType.Delete;
+            if (firstIsDelete || secondIsDelete)
+            {
+                return firstIsDelete && secondIsDelete;
+            }
+
+            if (firstPendingChange.UploadHashValue != null)
+            {
+                return secondPendingChange.UploadHashValue != null
+                    && firstPendingChange.UploadHashValue.SequenceEqual(secondPendingChange.UploadHashValue);
+            }
+
+            using (var firstFileStream = firstPendingChange.DownloadShelvedFile())
+            using (var secondFileStream = secondPendingChange.DownloadShelvedFile())
+            {
+                return StreamCompare(firstFileStream, secondFileStream);
+            }
         }
 
         /// <summary>

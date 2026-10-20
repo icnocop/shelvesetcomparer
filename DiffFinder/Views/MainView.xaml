@@ -29,9 +29,10 @@
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width="Auto"></ColumnDefinition>
         <ColumnDefinition MinWidth="300"></ColumnDefinition>
+        <ColumnDefinition Width="Auto"></ColumnDefinition>
       </Grid.ColumnDefinitions>
 
-      <TextBlock Grid.Column="0" HorizontalAlignment="Stretch" Margin="0,0,200,0" Style="{StaticResource TextBlockStyle}">      
+      <TextBlock Grid.Column="0" HorizontalAlignment="Stretch" Margin="0,0,200,0" Style="{StaticResource TextBlockStyle}">
           <Run FontSize="18">Comparison Summary</Run> 
           <LineBreak/>
       </TextBlock>
@@ -43,6 +44,18 @@
           </TextBlock>
         </tfscontrols:LabeledTextBox.ToolTip>
       </tfscontrols:LabeledTextBox>
+      <!-- the order the files are listed in. The code review lists them as a folder tree or as a flat
+           list, depending on the view picked there. -->
+      <DockPanel Grid.Column="2" Margin="10,0,0,0" VerticalAlignment="Top">
+        <TextBlock DockPanel.Dock="Left" VerticalAlignment="Center" Margin="0,0,4,0" Text="Order by:"/>
+        <ComboBox Name="FileOrderComboBox" Style="{StaticResource ComboBoxStyle}" Width="150" Height="22"
+                  SelectedValuePath="Tag" SelectedValue="{Binding ComparisonModel.FileOrder, Mode=TwoWay}"
+                  ToolTip="The order the files are listed in">
+          <ComboBoxItem Content="Folders first" Tag="{x:Static local:FileOrder.Tree}" ToolTip="By path, the subfolders of a folder before its files, like the folder view of a code review"/>
+          <ComboBoxItem Content="Path" Tag="{x:Static local:FileOrder.Path}" ToolTip="By full path, like the list view of a code review"/>
+          <ComboBoxItem Content="Shelveset order" Tag="{x:Static local:FileOrder.Shelveset}" ToolTip="In the order the files were shelved in"/>
+        </ComboBox>
+      </DockPanel>
     </Grid>
     <Grid Width="Auto" HorizontalAlignment="Stretch" Grid.Row="1">
       <Grid.ColumnDefinitions>
@@ -78,6 +91,15 @@
           <MenuItem Name="CancelCompareToMenuItem" Header="C_ancel Compare to" Click="CancelCompareToMenuItem_Click"/>
         </ContextMenu>
       </ListView.ContextMenu>
+      <!-- the stretched content makes each file fill its cell, so that the whole cell rather than only the
+           text answers to clicks and to the context menu. Set here rather than inherited through the
+           binding of the shared style, because the cells take the alignment of the row when they are
+           created, which is before that binding is resolved. -->
+      <ListView.ItemContainerStyle>
+        <Style TargetType="{x:Type ListViewItem}" BasedOn="{StaticResource {x:Type ListViewItem}}">
+          <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        </Style>
+      </ListView.ItemContainerStyle>
       <ListView.View>
         <GridView>
           <!-- the tags tell which shelveset a clicked cell belongs to, and the transparent background makes
@@ -85,14 +107,14 @@
           <GridViewColumn Header="First Shelveset" Width="Auto">
             <GridViewColumn.CellTemplate>
               <DataTemplate>
-                <TextBlock x:Name="FirstFileNameTxt" Tag="{x:Static local:ComparisonSide.First}" Background="Transparent" Text="{Binding Path=FirstFileDisplayName}" Style="{StaticResource ComparisonFileTextStyle}" />
+                <TextBlock x:Name="FirstFileNameTxt" Tag="{x:Static local:ComparisonSide.First}" Background="Transparent" Text="{Binding Path=FirstFileDisplayName}" ToolTip="{Binding Path=FirstFileToolTip}" Style="{StaticResource ComparisonFileTextStyle}" />
               </DataTemplate>
             </GridViewColumn.CellTemplate>
           </GridViewColumn>
           <GridViewColumn Header="Second Shelveset" Width="Auto">
             <GridViewColumn.CellTemplate>
               <DataTemplate>
-                <TextBlock x:Name="SecondFileNameTxt" Tag="{x:Static local:ComparisonSide.Second}" Background="Transparent" Text="{Binding Path=SecondFileDisplayName}" Style="{StaticResource ComparisonFileTextStyle}" />
+                <TextBlock x:Name="SecondFileNameTxt" Tag="{x:Static local:ComparisonSide.Second}" Background="Transparent" Text="{Binding Path=SecondFileDisplayName}" ToolTip="{Binding Path=SecondFileToolTip}" Style="{StaticResource ComparisonFileTextStyle}" />
               </DataTemplate>
             </GridViewColumn.CellTemplate>
           </GridViewColumn>

@@ -9,6 +9,8 @@ using Microsoft.TeamFoundation.VersionControl.Controls.Extensibility;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Diagnostics;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
@@ -47,6 +49,11 @@ namespace DiffFinder
         private string secondUserAccountName;
 
         /// <summary>
+        /// The number of refreshes running, the section being busy while any is
+        /// </summary>
+        private int busyCount;
+
+        /// <summary>
         /// Initializes a new instance of the SelectShelvesetSection class.
         /// </summary>
         public SelectShelvesetSection()
@@ -59,8 +66,16 @@ namespace DiffFinder
             this.IsBusy = false;
             this.shelvesets = new ObservableCollection<ShelvesetViewModel>();
             this.users = new ObservableCollection<string>(UserListBuilder.Build(null));
+            this.Pager = new ShelvesetPager();
+            this.Pager.PageShown += this.OnPageShown;
+            this.Pager.PropertyChanged += this.OnPagerChanged;
             this.SectionContent = new SelectShelvesetTeamExplorerView(this);
         }
+
+        /// <summary>
+        /// Gets the pager listing the shelvesets a page at a time, which also holds the selected shelvesets.
+        /// </summary>
+        public ShelvesetPager Pager { get; private set; }
 
         /// <summary>
         /// Gets or sets the user account name for first shelveset.
@@ -129,6 +144,7 @@ namespace DiffFinder
             protected set
             {
                 this.shelvesets = value;
+                this.Pager.SetItems(value);
                 this.RaisePropertyChanged(nameof(Shelvesets));
                 this.CaptureState();
             }
@@ -185,8 +201,9 @@ namespace DiffFinder
                     return;
                 }
 
-                await this.RefreshUsersAsync();
-                await this.RefreshAsync();
+                // the shelvesets of the signed in user can be listed while the users are still being read,
+                // which takes a while on a collection with many users
+                await Task.WhenAll(this.RefreshUsersAsync(), this.RefreshAsync());
             }
             catch (Exception)
             {
@@ -264,7 +281,10 @@ namespace DiffFinder
                 Shelvesets = this.Shelvesets,
                 Users = this.Users,
                 FirstUserAccountName = this.FirstUserAccountName,
-                SecondUserAccountName = this.SecondUserAccountName
+                SecondUserAccountName = this.SecondUserAccountName,
+                PageIndex = this.Pager.PageIndex,
+                SortPropertyName = this.Pager.SortPropertyName,
+                SortDirection = this.Pager.SortDirection
             };
 
             if (state.ContextKey != null)
@@ -300,11 +320,103 @@ namespace DiffFinder
                     ? saved.SecondUserAccountName
                     : UserListBuilder.NoUser;
 
+                // sorted and paged before the list is put back, so that only the page shown loads details
+                this.Pager.SetSort(saved.SortPropertyName, saved.SortDirection);
                 this.Shelvesets = saved.Shelvesets;
+                this.Pager.GoToPage(saved.PageIndex);
             }
             finally
             {
                 this.IsRefreshingUsers = false;
+            }
+        }
+
+        /// <summary>
+        /// Records the state of the section when the page or the sort order changes.
+        /// </summary>
+        /// <param name="sender">The pager</param>
+        /// <param name="e">The event arguments</param>
+        private void OnPagerChanged(object sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(ShelvesetPager.PageIndex) || e.PropertyName == nameof(ShelvesetPager.SortDirection))
+            {
+                this.CaptureState();
+            }
+        }
+
+        /// <summary>
+        /// Loads the details of the shelvesets of the page just shown: their work items, and the reviewers
+        /// of the code reviews requested on them, read with one query for the whole page.
+        /// </summary>
+        /// <param name="sender">The pager</param>
+        /// <param name="e">The shelvesets of the page whose details are not loaded yet</param>
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "VSTHRD100:Avoid async void methods", Justification = "Event handler, exceptions handled in method")]
+        private async void OnPageShown(object sender, PageShownEventArgs e)
+        {
+            var pageShelvesets = e.ShelvesetsWithoutDetails;
+            var context = this.CurrentContext;
+            var stopwatch = Stopwatch.StartNew();
+            try
+            {
+                var codeReviews = await Task.Run(() =>
+                {
+                    foreach (var shelveset in pageShelvesets)
+                    {
+                        shelveset.LoadDetails();
+                    }
+
+                    return ReadCodeReviews(context, pageShelvesets);
+                });
+
+                foreach (var shelveset in pageShelvesets)
+                {
+                    shelveset.Reviewers = codeReviews.Index.GetReviewers(shelveset.Name, shelveset.OwnerName, shelveset.OwnerDisplayName);
+                    shelveset.IsAssignedToMe = shelveset.IsReviewer(codeReviews.CurrentUser);
+                }
+
+                ShelvesetComparer.Instance?.TraceOutput($"Loaded the details of {pageShelvesets.Count} shelvesets in {stopwatch.ElapsedMilliseconds} ms");
+            }
+            catch (Exception ex)
+            {
+                // the details only add to the list, which stays usable without them
+                ShelvesetComparer.Instance?.TraceOutput($"Failed to load the details of the shelvesets: {ex}");
+            }
+        }
+
+        /// <summary>
+        /// Reads the code reviews requested on the given shelvesets, and the display name of the signed in
+        /// user to find the ones they review.
+        /// </summary>
+        /// <param name="context">The Team foundation server context</param>
+        /// <param name="shelvesets">The shelvesets</param>
+        /// <returns>The code reviews and the signed in user</returns>
+        private static (CodeReviewIndex Index, string CurrentUser) ReadCodeReviews(ITeamFoundationContext context, IReadOnlyList<ShelvesetViewModel> shelvesets)
+        {
+            if (context == null || !context.HasCollection)
+            {
+                return (new CodeReviewIndex(null, null), null);
+            }
+
+            string currentUser = null;
+            try
+            {
+                currentUser = context.TeamProjectCollection.AuthorizedIdentity?.DisplayName;
+            }
+            catch (Exception)
+            {
+                // the reviewers are still listed, without highlighting the reviews of the signed in user
+            }
+
+            try
+            {
+                return (CodeReviewReviewerQuery.Read(context.TeamProjectCollection, shelvesets), currentUser);
+            }
+            catch (Exception ex)
+            {
+                // a collection without code reviews, such as one whose process has no code review work
+                // item types, has no reviewers to list
+                ShelvesetComparer.Instance?.TraceOutput($"Failed to read the code reviews: {ex.Message}");
+                return (new CodeReviewIndex(null, null), currentUser);
             }
         }
 
@@ -318,10 +430,13 @@ namespace DiffFinder
             var secondUser = this.SecondUserAccountName;
             var context = this.CurrentContext;
 
+            var stopwatch = Stopwatch.StartNew();
+
             // Make the server call asynchronously to avoid blocking the UI
             var fetchShelvesetsTask = Task.Run(() => FetchShevlesets(firstUser, secondUser, context));
 
             this.Shelvesets = await fetchShelvesetsTask;
+            ShelvesetComparer.Instance?.TraceOutput($"Listed {this.Shelvesets.Count} shelvesets in {stopwatch.ElapsedMilliseconds} ms");
         }
 
         /// <summary>
@@ -430,17 +545,20 @@ namespace DiffFinder
         {
             try
             {
-                this.IsBusy = true;
+                this.BeginBusy();
                 this.IsRefreshingUsers = true;
 
                 var context = this.CurrentContext;
                 var previousFirstUser = this.FirstUserAccountName ?? UserListBuilder.NoUser;
                 var previousSecondUser = this.SecondUserAccountName ?? UserListBuilder.NoUser;
 
+                var stopwatch = Stopwatch.StartNew();
+
                 // Make the server call asynchronously to avoid blocking the UI
                 var fetchUsersTask = Task.Run(() => FetchUsers(context));
 
                 var fetchedUsers = await fetchUsersTask;
+                ShelvesetComparer.Instance?.TraceOutput($"Read {fetchedUsers.Users.Count} users in {stopwatch.ElapsedMilliseconds} ms");
 
                 this.Users = new ObservableCollection<string>(fetchedUsers.Users);
 
@@ -469,7 +587,7 @@ namespace DiffFinder
             finally
             {
                 this.IsRefreshingUsers = false;
-                this.IsBusy = false;
+                this.EndBusy();
             }
         }
 
@@ -560,7 +678,7 @@ namespace DiffFinder
         {
             try
             {
-                this.IsBusy = true;
+                this.BeginBusy();
 
                 await this.RefreshShelvesetsAsync();
             }
@@ -570,8 +688,27 @@ namespace DiffFinder
             }
             finally
             {
-                this.IsBusy = false;
+                this.EndBusy();
             }
+        }
+
+        /// <summary>
+        /// Marks the section busy while a refresh runs. The users and the shelvesets are refreshed side by
+        /// side, so the section stays busy until the last of them ends.
+        /// </summary>
+        private void BeginBusy()
+        {
+            this.busyCount++;
+            this.IsBusy = true;
+        }
+
+        /// <summary>
+        /// Ends a refresh started with <see cref="BeginBusy"/>.
+        /// </summary>
+        private void EndBusy()
+        {
+            this.busyCount = Math.Max(0, this.busyCount - 1);
+            this.IsBusy = this.busyCount > 0;
         }
 
         private void ShowFailed([CallerMemberName] string caller = null)
