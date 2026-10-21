@@ -37,6 +37,19 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
     steps:
+      # checked before anything is published, so that a missing token does not leave the release
+      # published to the Open VSIX Gallery only
+      - name: Check the Marketplace token
+        if: inputs.marketplace
+        shell: bash
+        env:
+          VS_PUBLISHER_ACCESS_TOKEN: ${{ secrets.VS_PUBLISHER_ACCESS_TOKEN }}
+        run: |
+          if [ -z "$VS_PUBLISHER_ACCESS_TOKEN" ]; then
+            echo "::error::The VS_PUBLISHER_ACCESS_TOKEN repository secret is not set. Add an Azure DevOps personal access token with the Marketplace (Publish) scope for all accessible organizations, or run again without publishing to the Visual Studio Marketplace."
+            exit 1
+          fi
+
       - name: Find the pre-release
         id: source
         shell: bash
